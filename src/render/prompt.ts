@@ -98,7 +98,8 @@ export class CanvasPrompt {
     const found = this.lastFlow?.glyphs.find((x) => x.index === index);
     const lh = this.flow.lineHeight;
     // Hand effects the glyph where it is drawn right now (animated, scrolled), not where the layout says it will be.
-    const g = found ? { ...found, x: this.gplaced ? this.gx[found.index]! : found.x, y: (this.gplaced ? this.gy[found.index]! : found.y) - this.scroll * lh } : undefined;
+    // gx/gy are already in scrolled space; only a raw layout position still needs the scroll taken off.
+    const g = found ? { ...found, x: this.gplaced ? this.gx[found.index]! : found.x, y: this.gplaced ? this.gy[found.index]! : found.y - this.scroll * lh } : undefined;
     const now = performance.now();
     if (g && kind === 'ok') {
       if (g.ch === ' ') { const p = this.spacePill(g); this.effects.hit({ ...g, x: p.x, w: p.w }, now, strong, p.h); }
