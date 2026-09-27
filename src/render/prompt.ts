@@ -97,7 +97,10 @@ export class CanvasPrompt {
     // Hand effects the glyph where it is drawn right now (animated, scrolled), not where the layout says it will be.
     const g = found ? { ...found, x: this.gplaced ? this.gx[found.index]! : found.x, y: (this.gplaced ? this.gy[found.index]! : found.y) - this.scroll * lh } : undefined;
     const now = performance.now();
-    if (g && kind === 'ok') this.effects.hit(g, now, strong, Math.round(this.fontPx * 1.25));
+    if (g && kind === 'ok') {
+      if (g.ch === ' ') { const p = this.spacePill(g); this.effects.hit({ ...g, x: p.x, w: p.w }, now, strong, p.h); }
+      else this.effects.hit(g, now, strong);
+    }
     if (g && kind === 'miss') this.effects.miss(g, now);
     this.ensureLoop();
   }
@@ -127,6 +130,11 @@ export class CanvasPrompt {
   /** Gap between glyphs. Must exceed 2× the current-box padding so the box never touches a neighbour. */
   private letterSpacing(): number { return this.state.reading ? 2 : Math.round(this.fontPx * (this.compact ? 0.5 : 0.32)); }
   private boxPad(): number { return Math.round(this.fontPx * 0.2); }
+  /** A Space pill inside its widened slot, inset so a neighbour's cursor box (pad past the letter) always leaves a gap. */
+  private spacePill(g: { x: number; w: number }): { x: number; w: number; h: number } {
+    const gap = Math.round(this.fontPx * 0.18), inset = Math.max(gap, this.boxPad() + gap - this.letterSpacing());
+    return { x: g.x + inset, w: Math.max(1, g.w - inset * 2), h: Math.round(this.fontPx * 1.05) };
+  }
 
   /** Reads host size once per resize (outside the frame loop) and re-lays out. */
   private measureHost(): void {
@@ -229,11 +237,8 @@ export class CanvasPrompt {
     const cur0 = flow.glyphs.find((g) => g.index === pos);
     const cur = cur0 ? { ...cur0, y: cur0.y - firstLine * lh } : undefined;
     if (cur) {
-      const isSpace = cur.ch === ' ';
-      const h = isSpace ? Math.round(this.fontPx * 1.25) : Math.round(this.fontPx * 1.4);
-      const w = isSpace ? cur.w : cur.w + pad * 2;
-      const x = isSpace ? cur.x : cur.x - pad;
-      fx.target({ ...cur, x }, w, h, now);
+      if (cur.ch === ' ') { const p = this.spacePill(cur); fx.target({ ...cur, x: p.x }, p.w, p.h, now); }
+      else fx.target({ ...cur, x: cur.x - pad }, cur.w + pad * 2, Math.round(this.fontPx * 1.4), now);
     }
     const c = fx.cursor;
     const bad = !!cur && (fx.enabled ? fx.missing(now) : wrong);
@@ -262,17 +267,17 @@ export class CanvasPrompt {
       const currentInk = bad ? colors.missInk : arrived ? '#fff' : colors.ink;
       // Every space is a SPACE pill, reading passages included: a dot there reads as the '.' key.
       if (g.ch === ' ') {
-        const h = Math.round(this.fontPx * 1.25), w = g.w;
+        const p = this.spacePill({ x, w: g.w }), h = p.h, w = p.w;
         if (!current) {
           ctx.fillStyle = colors.pill;
           ctx.strokeStyle = colors.pillLine; ctx.lineWidth = 1;
-          ctx.beginPath(); ctx.roundRect(x, cy - h / 2, w, h, 5); ctx.fill(); ctx.stroke();
+          ctx.beginPath(); ctx.roundRect(p.x, cy - h / 2, w, h, 5); ctx.fill(); ctx.stroke();
         }
         ctx.fillStyle = current ? currentInk : colors.pillInk;
-        ctx.font = `600 ${Math.round(this.fontPx * 0.36)}px ${this.flow.font.split('px ')[1]}`;
+        ctx.font = `600 ${Math.round(this.fontPx * 0.3)}px ${this.flow.font.split('px ')[1]}`;
         ctx.textAlign = 'center';
         // The label rides inside the sprung pill while current, so it never lags behind the box.
-        const lx = current && c.placed ? this.padding + c.x + c.w / 2 + shake.x : x + w / 2;
+        const lx = current && c.placed ? this.padding + c.x + c.w / 2 + shake.x : p.x + w / 2;
         ctx.fillText('SPACE', lx, cy + 1); ctx.textAlign = 'left';
         ctx.font = this.flow.font;
         continue;
