@@ -53,7 +53,7 @@ export const docs = defineDocs({
         { text: 'Rest the fingers lightly near the home row; find F and J by feel.' },
         { text: 'Move the finger first, then let the hand shift a little; return toward neutral when it is easy.' },
         { text: 'Press down, not across. Light pressure is enough.' },
-        { text: 'Use Shift with the opposite hand to the letter. Either thumb presses Space.' },
+        { text: 'Each Shift belongs to the pinky on its side. Hold the Shift on the opposite hand from the letter: right pinky on right Shift for a left-hand letter, left pinky on left Shift for a right-hand letter. Either thumb presses Space.' },
         { text: 'Read ahead and prepare the next finger while the current one presses.' },
         { text: 'Pause when you notice tension. Slow, accurate practice counts fully.' },
       ] },
@@ -70,7 +70,7 @@ export const docs = defineDocs({
           ['Right ring', 'O · L · .'],
           ['Right pinky', 'P · ; · /'],
         ] },
-        { kind: 'p', text: 'Numbers follow the same columns: 1 and 2 to the left pinky and ring, 3 to the middle, 4 and 5 to the index; 6 and 7 to the right index, 8 middle, 9 ring, 0 pinky. Shifted symbols use the finger of the key underneath them, with Shift held by the other hand.' },
+        { kind: 'p', text: 'Numbers follow the same columns: 1 and 2 to the left pinky and ring, 3 to the middle, 4 and 5 to the index; 6 and 7 to the right index, 8 middle, 9 ring, 0 pinky. Shifted symbols use the finger of the key underneath them, with Shift held by the pinky of the other hand.' },
         { kind: 'p', text: 'The map is deliberately stable through the whole course. A learner who keeps changing assignments in search of a marginal gain interferes with their own motor learning; learn one map first, optimise later if you ever want to.' },
       ] },
       { id: 'movements', title: 'Practising movements', question: 'How does KeyJam practise typing movements?', answer: `${PRODUCT} treats typing as movements between keys, not just keys. Each new-key lesson isolates one movement, carries it into everyday words and then into a short phrase, so the same motion has to hold in real text.`, keywords: ['movements', 'transition loop', 'steady beat', 'practice forms', 'bigrams'], blocks: [

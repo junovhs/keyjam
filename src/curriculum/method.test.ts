@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { METHODS, TRADITIONAL, fingerOf, homeOf, keysOf, mirrorOf, reassignedKeys, setMethod, activeMethod, DEFAULT_METHOD_ID, type TypingMethod } from './method';
+import { METHODS, SHIFT_FINGER, TRADITIONAL, shiftSideFor, fingerOf, homeOf, keysOf, mirrorOf, reassignedKeys, setMethod, activeMethod, DEFAULT_METHOD_ID, type TypingMethod } from './method';
 import { fingerForKey } from './fingers';
 
 const KEYS = "abcdefghijklmnopqrstuvwxyz0123456789;,./-=[]'\\` ";
@@ -60,5 +60,19 @@ describe('method-aware lesson copy', () => {
     expect(resolveCopy(trailById('index-down').blurb)).toContain('B belongs to your left index');
     expect(resolveCopy(trailById('ring-down').blurb)).toBe('Z is the LEFT PINKY. Period is the right ring.');
     setMethod(DEFAULT_METHOD_ID);
+  });
+});
+
+describe('Shift ownership', () => {
+  it('each Shift belongs to its own pinky and a shifted key takes the opposite-hand Shift', () => {
+    expect(SHIFT_FINGER).toEqual({ left: 'lp', right: 'rp' });
+    expect(shiftSideFor('Q')).toBe('right');
+    expect(shiftSideFor('F')).toBe('right');
+    expect(shiftSideFor('J')).toBe('left');
+    expect(shiftSideFor('P')).toBe('left');
+    expect(shiftSideFor('!')).toBe('right');
+    expect(shiftSideFor('?')).toBe('left');
+    expect(shiftSideFor('q')).toBeNull();
+    expect(shiftSideFor(' ')).toBeNull();
   });
 });

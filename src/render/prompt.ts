@@ -6,6 +6,9 @@ export interface PromptState { text: string; pos: number; wrong: boolean; readin
 type Palette = { ink: string; done: string; orange: string; wrongBg: string; wrongInk: string; missPill: string; missInk: string; pill: string; pillLine: string; pillInk: string; pillDone: string; pillDoneInk: string };
 const DARK: Palette = { ink: '#e8e6df', done: '#8e8d86', orange: '#ff5418', wrongBg: '#ffb49f', wrongInk: '#201814', missPill: '#000', missInk: '#ff5418', pill: '#2b2c29', pillLine: '#5c5e59', pillInk: '#c5c3bc', pillDone: '#222320', pillDoneInk: '#74766f' };
 const LIGHT: Palette = { ink: '#11110f', done: '#b3afa8', orange: '#ff5418', wrongBg: '#ffb49f', wrongInk: '#201814', missPill: '#11110f', missInk: '#ff5418', pill: '#fbfaf7', pillLine: '#c9c5bd', pillInk: '#6d6a65', pillDone: '#f3f1ec', pillDoneInk: '#b3afa8' };
+/** Capitals are 15% larger than lowercase and underlined (see CanvasPrompt.glyph). */
+export const CAPITAL_SCALE = 1.15;
+export const isCapital = (ch: string): boolean => ch.length === 1 && ch !== ch.toLowerCase() && ch === ch.toUpperCase();
 export interface PromptOptions { theme?: 'dark' | 'light'; compact?: boolean; orb?: boolean }
 
 /**
@@ -134,6 +137,19 @@ export class CanvasPrompt {
   private spacePill(g: { x: number; w: number }): { x: number; w: number; h: number } {
     const gap = Math.round(this.fontPx * 0.18), inset = Math.max(gap, this.boxPad() + gap - this.letterSpacing());
     return { x: g.x + inset, w: Math.max(1, g.w - inset * 2), h: Math.round(this.fontPx * 1.05) };
+  }
+
+  /**
+   * One letter at its slot. A capital is drawn CAPITAL_SCALE larger and underlined, so a Shift press is visible before
+   * it is due; `s` is the cursor's pop, applied on top. Scaling is about the slot's centre, so spacing never changes.
+   */
+  private glyph(ch: string, x: number, cy: number, w: number, s: number): void {
+    const ctx = this.ctx, cap = isCapital(ch), k = s * (cap ? CAPITAL_SCALE : 1);
+    if (k === 1) ctx.fillText(ch, x, cy + 1);
+    else { ctx.save(); ctx.translate(x + w / 2, cy + 1); ctx.scale(k, k); ctx.fillText(ch, -w / 2, 0); ctx.restore(); }
+    if (!cap) return;
+    const uw = w * k, t = Math.max(2, Math.round(this.fontPx * 0.07)), uy = cy + 1 + Math.round(this.fontPx * 0.5 * k);
+    ctx.fillRect(x + w / 2 - uw / 2, uy, uw, t);
   }
 
   /** Reads host size once per resize (outside the frame loop) and re-lays out. */
@@ -282,16 +298,8 @@ export class CanvasPrompt {
         ctx.font = this.flow.font;
         continue;
       }
-      if (current) {
-        ctx.fillStyle = currentInk;
-        if (bad || scale > 1.001) {
-          const s = current ? scale : 1;
-          ctx.save(); ctx.translate(x + g.w / 2, cy + 1); ctx.scale(s, s); ctx.fillText(g.ch, -g.w / 2, 0); ctx.restore();
-        } else ctx.fillText(g.ch, x, cy + 1);
-        continue;
-      }
-      ctx.fillStyle = colors.ink;
-      ctx.fillText(g.ch, x, cy + 1);
+      ctx.fillStyle = current ? currentInk : colors.ink;
+      this.glyph(g.ch, x, cy, g.w, current ? scale : 1);
     }
     ctx.globalAlpha = 1;
     // A letter that has fallen past the canvas's bottom edge is gone; freeing it lets the loop stop sooner.

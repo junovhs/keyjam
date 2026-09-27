@@ -4,9 +4,16 @@ import { allowedChars } from './index';
 import { carriersOf } from './headline';
 import { defaultHeadline } from './lesson-flow';
 
-export type BriefIcon = 'hand' | 'bumps' | 'anchor' | 'feather' | 'eye' | 'space' | 'rhythm' | 'stretch';
+export type BriefIcon = 'hand' | 'bumps' | 'anchor' | 'feather' | 'eye' | 'space' | 'rhythm' | 'stretch' | 'shift';
+/**
+ * `keys`/`press` are key tokens: a lowercase key, SHIFT_TOKEN.left/right for a Shift key itself, or a capital, which must
+ * be typed holding the opposite-hand Shift.
+ */
 export interface BriefTip { icon: BriefIcon; title: string; body: string; keys?: string; press?: string }
-export interface Briefing { title: string; lead: string; tips: readonly BriefTip[] }
+/** `badge` marks a briefing that introduces new keys (drawn apart from the rest); `required` cannot be skipped with Esc. */
+export interface Briefing { title: string; lead: string; tips: readonly BriefTip[]; badge?: string; required?: true }
+/** Press tokens for the Shift keys themselves (not typable characters, so they never collide with a real key). */
+export const SHIFT_TOKEN = { left: '‹', right: '›' } as const;
 const tip = (icon: BriefIcon, title: string, body: string, keys?: string, press?: string): BriefTip => ({ icon, title, body, ...(keys ? { keys } : {}), ...(press ? { press } : {}) });
 const brief = (title: string, lead: string, ...tips: BriefTip[]): Briefing => ({ title, lead, tips });
 const BRIEFINGS: Record<string, Briefing> = {
@@ -47,6 +54,14 @@ function movementTip(trail: Trail): BriefTip | null {
       : `[${a}] on one hand, [${b}] on the other; let each hand prepare while the other presses.`;
   return tip('eye', `Your movement: [${a}] to [${b}]`, `${how} You'll practise it, then use it in ${list(words)}.`, target);
 }
+/** The Shift lesson's introduction: two new keys, whose pinky owns each, and the opposite-hand rule, each pressed to go on. */
+function shiftBriefing(): Briefing {
+  const both = SHIFT_TOKEN.left + SHIFT_TOKEN.right;
+  return brief('New keys: Shift', 'Capitals come from two new keys, held by the hand that is not typing the letter.',
+    tip('shift', 'New keys: the two Shift keys', 'There is a [shift] at each end of the bottom row, and each belongs to a pinky: your left pinky owns left [shift] and your right pinky owns right [shift]. Press each one to find it.', both, both),
+    tip('hand', 'Always the opposite hand', 'A capital from the left hand, like [F]: your right pinky holds right [shift]. A capital from the right hand, like [J]: your left pinky holds left [shift]. One hand holds while the other types, so no hand has to grab two keys at once. Type both.', 'FJ', 'FJ'),
+    tip('feather', 'Hold, press, release', 'Hold [shift] first, press the letter, then let both go. Capitals are drawn larger and underlined, and the keyboard lights the [shift] to use.', both));
+}
 const cache = new Map<string, Briefing | null>();
 /** Later new movements also receive a short explicit introduction, resolved through the active method. */
 export function briefingFor(trail: Trail): Briefing | null {
@@ -59,7 +74,7 @@ function build(trail: Trail): Briefing | null {
   const authored = BRIEFINGS[trail.id];
   // Roots keeps its authored steps; the movement step joins as step 2 (CURR-52).
   if (authored) return movement ? { ...authored, tips: [authored.tips[0]!, movement, ...authored.tips.slice(1)] } : authored;
-  if (trail.shift) return brief('Opposite-hand Shift', 'Connect a held modifier to a light letter press.', tip('hand', 'Let the other hand help', 'Hold right [shift] for left-hand letters and left [shift] for right-hand letters. The keyboard lights the [shift] to hold; release it between capitals.', 'fj'));
+  if (trail.shift) return { ...shiftBriefing(), badge: 'New keys', required: true };
   if (!trail.newKeys) return null;
   // Letter lessons: press each new key with its finger, see what the lesson builds toward, then keep it light.
   if (movement) return brief(trail.name, 'Meet the movement before expecting yourself to remember it.',

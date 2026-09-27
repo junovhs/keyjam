@@ -3,8 +3,8 @@ import { MAIN_TRAILS, allowedChars, renderCopy, resolveCopy, trailById, trailsIn
 import { defaultHeadline, lessonExercises } from './lesson-flow';
 import { briefingWords } from './briefings';
 import { generate } from '../engine/textgen';
-import { briefedTrails, briefingFor } from './briefings';
-import { DEFAULT_METHOD_ID, METHODS, isShifted, setMethod } from './method';
+import { SHIFT_TOKEN, briefedTrails, briefingFor } from './briefings';
+import { DEFAULT_METHOD_ID, METHODS, isShifted, setMethod, shiftSideFor } from './method';
 afterEach(() => setMethod(DEFAULT_METHOD_ID));
 
 describe('lesson briefings', () => {
@@ -100,5 +100,18 @@ describe('letter-lesson briefings (CURR-52)', () => {
   it('keep the slash lesson to its real pairs', () => {
     const text = briefingFor(trailById('last-reaches'))!.tips.map(tip => tip.body).join(' ');
     expect(text).toContain('yes/no');
+  });
+});
+
+describe('the Shift lesson briefing', () => {
+  it('introduces Shift as new keys, owned by the pinkies, and makes the learner press both Shifts and an opposite-hand capital each way', () => {
+    const b = briefingFor(trailById('opposite-shift'))!;
+    expect(b.badge).toBe('New keys');
+    expect(b.required).toBe(true);
+    const [find, opposite] = b.tips;
+    expect(find!.press).toBe(SHIFT_TOKEN.left + SHIFT_TOKEN.right);
+    expect(find!.body).toMatch(/left pinky owns left \[shift\].*right pinky owns right \[shift\]/);
+    expect(opposite!.press).toBe('FJ');
+    expect([...opposite!.press!].map((k) => shiftSideFor(k))).toEqual(['right', 'left']);
   });
 });

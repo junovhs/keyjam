@@ -65,3 +65,11 @@ export const homeOf = (key: string, method = active): string => HOME[fingerOf(ke
 const MIRROR: Readonly<Record<FingerId, FingerId>> = { lp: 'rp', lr: 'rr', lm: 'rm', li: 'ri', ri: 'li', rm: 'lm', rr: 'lr', rp: 'lp', thumb: 'thumb' };
 export const mirrorOf = (key: string, method = active): string => HOME[MIRROR[fingerOf(key, method) ?? 'li']];
 export const handOf = (finger: FingerId): Hand | 'either' => (finger === 'thumb' ? 'either' : finger.startsWith('l') ? 'left' : 'right');
+/** Each Shift belongs to the pinky on its own side, like any other key. */
+export const SHIFT_FINGER: Readonly<Record<Hand, FingerId>> = { left: 'lp', right: 'rp' };
+/** The Shift key to hold for `key` (method shift 'opposite': the other hand from the key's finger); null when unshifted. */
+export function shiftSideFor(key: string, method = active): Hand | null {
+  if (!isShifted(key)) return null;
+  const f = fingerOf(key, method), h = f ? handOf(f) : null;
+  return h === 'left' ? 'right' : h === 'right' ? 'left' : null;
+}

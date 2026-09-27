@@ -113,7 +113,7 @@ export function lessonExercises(t: Trail, pick?: SlotPick): readonly LessonExerc
     const introduction = t.shift ? 'fFjJ fFjJ' : [...keys].map(k => k + k).join(' ');
     return [
       guide('Find the movement deliberately', keys, introduction, t.shift
-        ? 'For [f] hold right [shift]; for [j] hold left [shift]. Release gently. The key and opposite-hand guide show each movement.'
+        ? 'For [F] your right pinky holds right [shift]; for [J] your left pinky holds left [shift]. Hold Shift first, press the letter, release both.'
         : 'Try each new key slowly. The guide names its finger and any opposite-hand Shift. Adjust the hand comfortably.'),
       use('Use it in context', 'words', 'Connect the movement to a useful word, number or expression. Accuracy has no minimum speed.', Math.min(48, t.length)),
       use('Put it to work', 'passage', 'Read ahead and prepare the next movement. Pause whenever the hands need to soften.', t.length),

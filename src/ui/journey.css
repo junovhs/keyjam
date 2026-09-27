@@ -155,6 +155,31 @@ body.brief-open .metrics{visibility:hidden}
 @media(prefers-reduced-motion:reduce){.begin-cue,.brief-key,.brief-key::after,.brief-check,.brief-check svg{animation:none}.brief-check svg{stroke-dashoffset:0}}
 @media(max-width:760px){.brand-hint{display:none}.result-actions{flex-direction:column;align-items:stretch}.brief-keys{grid-column:1/-1;justify-content:center}.restart-btn{top:8px;right:8px;width:32px;height:32px}}
 
+/* A briefing that introduces new keys (the Shift lesson) is drawn apart: the dark of the typing panel, an orange frame, a badge. */
+.brief-badge{display:inline-block;margin-bottom:10px;padding:4px 10px;border-radius:4px;background:var(--orange);color:#fff;font:700 11px var(--mono);letter-spacing:.14em;text-transform:uppercase}
+.brief-badge[hidden]{display:none}
+.brief-card--new{background:#1b1b19;border:2px solid var(--orange);box-shadow:0 14px 36px rgba(255,84,24,.18)}
+.brief-card--new .brief-step{border-color:#3a3b37}
+.brief-card--new .brief-count{color:#a3a19a}
+.brief-card--new .brief-dots i{background:#3a3b37}.brief-card--new .brief-dots i.on{background:var(--orange)}
+.brief-card--new .brief-icon{background:var(--orange);color:#fff}
+.brief-card--new .brief-body h3{color:#fff;font-size:30px}
+.brief-card--new .brief-body p{color:#d9d6ce;font-size:17px}
+.brief-card--new .keycap-inline{background:#2b2c29;border-color:#5c5e59;color:#fff}
+.brief-card--new .brief-key{color:#ffb49f}
+.brief-card--new .brief-key small{color:#a3a19a}
+.brief-card--new .brief-key.filled{color:#fff}.brief-card--new .brief-key.filled small{color:#ffd8c9}
+.brief-key.wide{width:auto;min-width:92px;max-width:150px;padding:6px 14px}.brief-key.wide small{white-space:normal;text-align:center;line-height:1.35}
+@media(max-width:1100px){.brief-card--new .brief-body h3{font-size:24px}.brief-card--new .brief-body p{font-size:15px}}
+/* Shift in the hand hint: its own chip, so the second finger is never missed. */
+.shift-hint{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:4px;background:#fff0e7;color:var(--orange);white-space:nowrap}
+.shift-hint strong{color:var(--orange)}
+/* Throughout the Shift lesson the Shift to hold pulses, and its hint is larger. */
+body.shift-lesson .keycap.shiftcap.hot{animation:shift-pulse 1.2s ease-in-out infinite}
+body.shift-lesson .shift-hint{font-size:1.1em;padding:4px 10px;border:1px solid var(--orange)}
+@keyframes shift-pulse{0%,100%{transform:none}50%{transform:scale(1.12)}}
+@media(prefers-reduced-motion:reduce){body.shift-lesson .keycap.shiftcap.hot{animation:none}}
+
 /* ---- interface sound toggle + small moments ------------------------------------ */
 .sound-btn{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;background:rgba(255,255,255,.6);color:#4e4b46;padding:0!important;transition:color .12s,border-color .12s,transform .12s}
 .sound-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}

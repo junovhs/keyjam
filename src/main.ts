@@ -3,13 +3,13 @@ import { nextPractice } from './engine/next-practice';
 import { beatInterval, evenness, onBeat } from './engine/beat';
 import { demoSchedule, demoStepMs, type DemoStep } from './engine/demo';
 import { PACE_NOTE, notePace, paceFactor, paceNoteApplies, typedFast } from './engine/pace';
-import { briefingFor, type BriefIcon, type Briefing } from './curriculum/briefings';
+import { briefingFor, SHIFT_TOKEN, type BriefIcon, type Briefing } from './curriculum/briefings';
 import { fingerPractice, completeFingerPage, FINGER_PAGES, type FingerPractice, type SideScore } from './engine/finger-practice';
 import type { Stop } from './curriculum/stops';
 import { fingerLevels, pairCompleted, FINGER_PASS_ACC, type FingerPair } from './curriculum/finger-course';
 import { MAIN_TRAILS, trailById, allowedChars, gateFor, groveOf, renderCopy, resolveCopy, trailsInGrove, type StageName, type Trail } from './curriculum';
 import { fingerById, fingerForKey, remedialText } from './curriculum/fingers';
-import { METHODS, activeMethod, baseKey, fingerOf, isShifted, reassignedKeys, setMethod } from './curriculum/method';
+import { METHODS, SHIFT_FINGER, activeMethod, baseKey, fingerOf, isShifted, reassignedKeys, setMethod, shiftSideFor, type Hand } from './curriculum/method';
 import { KeyModel, MASTERED } from './engine/keymodel';
 import { TransitionModel } from './engine/transitions';
 import { decide, sessionReview, type Decision } from './engine/coach';
@@ -36,7 +36,7 @@ import './docs.css';
 import { renderMap } from './ui/map';
 import { sound, wireAudioToggle, type CueName } from './ui/sound';
 import { loadHands, onFingerHover, paintHand, pulseFinger } from './ui/hands';
-import { CanvasPrompt } from './render/prompt';
+import { CanvasPrompt, isCapital } from './render/prompt';
 import { selfTest as textflowSelfTest } from './render/textflow';
 
 /** What the current run is for: the trail itself, a finger drill, or a coach drill (confusion / reach / review). */
@@ -255,7 +255,7 @@ function prompt(): void {
   [...run.text].forEach((c, i) => {
     const s = document.createElement('span');
     s.textContent = c === ' ' ? 'SPACE' : c;
-    s.className = 'ch' + (c === ' ' ? ' space' : '') + (i < run.pos ? ' done' : '') + (i === run.pos ? ' current' : '') + (i === run.pos && run.wrong ? ' wrong' : '');
+    s.className = 'ch' + (c === ' ' ? ' space' : '') + (isCapital(c) ? ' cap' : '') + (i < run.pos ? ' done' : '') + (i === run.pos ? ' current' : '') + (i === run.pos && run.wrong ? ' wrong' : '');
     p.appendChild(s);
   });
   p.querySelector('.current')?.scrollIntoView({ block: 'nearest' });
@@ -292,17 +292,18 @@ function nextVisual(): void {
     badges({}); paintHand('left', null); paintHand('right', null);
     setHtml($('handInstruction'), 'Prepare the next movement. Finger hints are here whenever you want them.'); setText($('nextCue'), ''); return;
   }
-  const c = run.current, f = fingerForKey(c);
-  badges(f && 'anchor' in f && c !== ' ' ? { [f.id]: baseKey(c) } : {});
-  const shifted = isShifted(c);
+  const c = run.current, f = fingerForKey(c), shiftSide = shiftSideFor(c);
+  // A capital or symbol has two fingers: the key's own, and the opposite pinky on its Shift.
+  const shiftFinger = shiftSide ? SHIFT_FINGER[shiftSide] : null;
+  badges(f && 'anchor' in f && c !== ' ' ? { [f.id]: baseKey(c), ...(shiftFinger ? { [shiftFinger]: '⇧' } : {}) } : {});
   if (c === ' ') {
     paintHand('left', 'thumb'); paintHand('right', 'thumb');
     setHtml($('handInstruction'), 'Press with either thumb.');
   } else if (f) {
-    paintHand('left', f.id); paintHand('right', f.id);
-    const shiftNote = shifted && 'hand' in f ? ` · hold ${f.hand === 'left' ? 'right' : 'left'} [shift]` : '';
+    paintHand('left', shiftSide === 'left' ? shiftFinger : f.id); paintHand('right', shiftSide === 'right' ? shiftFinger : f.id);
     const anchor = 'anchor' in f && f.anchor !== c.toLowerCase() ? ` · landmark [${f.anchor}]` : '';
-    setHtml($('handInstruction'), '<strong>' + escapeHtml(f.full) + '</strong>' + renderCopy(anchor + shiftNote));
+    const shiftNote = shiftSide ? ` <span class="shift-hint">+ <strong>${shiftSide === 'left' ? 'Left' : 'Right'} pinky</strong> holds ${shiftSide} ${renderCopy('[shift]')}</span>` : '';
+    setHtml($('handInstruction'), '<strong>' + escapeHtml(f.full) + '</strong>' + renderCopy(anchor) + shiftNote);
   } else {
     paintHand('left', null); paintHand('right', null);
     setHtml($('handInstruction'), run.status === 'complete' ? 'Run complete.' : 'Let your hands rest comfortably.');
@@ -341,7 +342,7 @@ function keymap(): void {
     // Real ANSI stagger, in key pitch from the backtick's left edge: Tab 1.5u, Caps 1.75u, Shift 2.25u.
     const stagger = [0, 1.5, 1.75, 2.25];
     map.innerHTML = rows.map((r, i) => `<div class="keyrow" style="--row-offset:calc(var(--u, 0px) * ${stagger[i]})">${[...r].map(cap).join('')}</div>`).join('')
-      + `<div class="keyrow"><span class="keycap shiftcap" data-shift="r">⇧</span>${cap(' ')}<span class="keycap shiftcap" data-shift="l">⇧</span></div>`;
+      + `<div class="keyrow"><span class="keycap shiftcap" data-shift="left" title="Left Shift · left pinky">⇧</span>${cap(' ')}<span class="keycap shiftcap" data-shift="right" title="Right Shift · right pinky">⇧</span></div>`;
     keymapBuilt = layout; keymapLabelled = null;
     measurePitch();
   }
@@ -349,8 +350,8 @@ function keymap(): void {
   const hot = new Set<Element>();
   const target = show ? map.querySelector<HTMLElement>(`[data-key="${CSS.escape(c)}"]`) : null;
   if (target) hot.add(target);
-  const side = show && shifted ? fingerForKey(run.current)?.id[0] : undefined;
-  // The opposite hand holds Shift: a right-hand key lights the left Shift, drawn first in the row.
+  // The opposite hand holds Shift: a right-hand key lights the left Shift.
+  const side = show ? shiftSideFor(run.current) : null;
   const shiftCap = side ? map.querySelector(`[data-shift="${side}"]`) : null;
   if (shiftCap) hot.add(shiftCap);
   for (const el of map.querySelectorAll('.keycap.hot')) if (!hot.has(el)) el.classList.remove('hot');
@@ -364,6 +365,10 @@ function keymap(): void {
   const capOf = (e: Event) => (e.target as Element | null)?.closest?.<HTMLElement>('#keymap [data-key]') ?? null;
   $('keymap').addEventListener('pointerover', (e) => { const el = capOf(e); if (el && !el.contains(e.relatedTarget as Node | null)) peekKey(el.dataset.key!); });
   $('keymap').addEventListener('pointerout', (e) => { const el = capOf(e); if (el && !el.contains(e.relatedTarget as Node | null)) peekKey(null); });
+  // A Shift cap shows the pinky that owns it.
+  const shiftOf = (e: Event) => (e.target as Element | null)?.closest?.<HTMLElement>('#keymap [data-shift]') ?? null;
+  $('keymap').addEventListener('pointerover', (e) => { const el = shiftOf(e); if (el && !el.contains(e.relatedTarget as Node | null)) { const id = SHIFT_FINGER[el.dataset.shift as Hand]; badges({ [id]: '⇧' }); paintHand('left', id); paintHand('right', id); } });
+  $('keymap').addEventListener('pointerout', (e) => { const el = shiftOf(e); if (el && !el.contains(e.relatedTarget as Node | null)) nextVisual(); });
   $('keymap').addEventListener('click', (e) => { const el = capOf(e); if (el && mode.kind === 'explore') { mode = { kind: 'explore', key: el.dataset.key! }; resetRun(); } });
 }
 /** Hovering a keycap paints its finger; hovering a finger lights its keys. Null restores the live state. */
@@ -382,6 +387,8 @@ function peekFinger(id: string | null): void {
   paintHand('left', id); paintHand('right', id);
   const keys = id === 'thumb' ? [' '] : f ? [...f.keys] : [];
   $('keymap').querySelectorAll<HTMLElement>('[data-key]').forEach(el => { if (keys.includes(el.dataset.key!)) el.classList.add('peek'); });
+  const side = (Object.keys(SHIFT_FINGER) as Hand[]).find((h) => SHIFT_FINGER[h] === id);
+  if (side) $('keymap').querySelector(`[data-shift="${side}"]`)?.classList.add('peek');
 }
 onFingerHover(peekFinger);
 $('practiseSlowly').onclick = practiseSlowly;
@@ -399,7 +406,11 @@ document.addEventListener('pointerover', (e) => peekFingerRef(e, true));
 document.addEventListener('pointerout', (e) => peekFingerRef(e, false));
 document.addEventListener('focusin', (e) => peekFingerRef(e, true));
 document.addEventListener('focusout', (e) => peekFingerRef(e, false));
-function render(): void { header(); labels(); prompt(); metrics(); keymap(); nextVisual(); if (brief) renderBrief(); }
+function render(): void {
+  // The Shift lesson keeps Shift in the spotlight: the lit Shift cap and its hint pulse throughout.
+  document.body.classList.toggle('shift-lesson', mode.kind === 'trail' && !!runTrail.shift);
+  header(); labels(); prompt(); metrics(); keymap(); nextVisual(); if (brief) renderBrief();
+}
 
 // ---- briefing: a few steps before a lesson, read one at a time ------------------
 const BRIEF_ICONS: Record<BriefIcon, string> = {
@@ -411,7 +422,34 @@ const BRIEF_ICONS: Record<BriefIcon, string> = {
   space: '<svg viewBox="0 0 24 24"><path d="M4 10v4h16v-4"/><path d="M8 17h8"/></svg>',
   rhythm: '<svg viewBox="0 0 24 24"><path d="M3 12h3l2-6 3 12 3-9 2 3h5"/></svg>',
   stretch: '<svg viewBox="0 0 24 24"><path d="M12 20V6M8 10l4-4 4 4"/><path d="M6 20h12"/></svg>',
+  shift: '<svg viewBox="0 0 24 24"><path d="M12 3.5 3.5 12H8v7.5h8V12h4.5Z"/></svg>',
 };
+/** Which Shift keys are held right now, by physical side (keydown/keyup codes; the event's shiftKey cannot tell them apart). */
+const shiftHeld = new Set<Hand>();
+const shiftCodeSide = (code: string): Hand | null => (code === 'ShiftLeft' ? 'left' : code === 'ShiftRight' ? 'right' : null);
+window.addEventListener('keydown', (e) => { const h = shiftCodeSide(e.code); if (h) shiftHeld.add(h); }, true);
+window.addEventListener('keyup', (e) => { const h = shiftCodeSide(e.code); if (h) shiftHeld.delete(h); }, true);
+window.addEventListener('blur', () => shiftHeld.clear());
+/** A capital typed holding only the same-hand Shift: the key it needed instead, else null. */
+function sameHandShift(k: string): Hand | null {
+  const need = shiftSideFor(k);
+  return need && !shiftHeld.has(need) && shiftHeld.size > 0 ? need : null;
+}
+/** A briefing key token as the tile shows it: label and the finger(s) that press it. */
+function briefTokenLabel(k: string): { label: string; finger: string } {
+  if (k === SHIFT_TOKEN.left) return { label: '⇧ Shift', finger: 'left pinky' };
+  if (k === SHIFT_TOKEN.right) return { label: 'Shift ⇧', finger: 'right pinky' };
+  if (k === ' ') return { label: 'Space', finger: resolveCopy('{ }') };
+  const side = shiftSideFor(k);
+  return { label: k.toUpperCase(), finger: side ? `${side} ⇧ + ${resolveCopy(`{${k.toLowerCase()}}`)}` : resolveCopy(`{${k}}`) };
+}
+/** Fingers a briefing key token uses: the key's own, plus the pinky on the Shift it needs. */
+function briefTokenFingers(k: string): string[] {
+  if (k === SHIFT_TOKEN.left) return [SHIFT_FINGER.left];
+  if (k === SHIFT_TOKEN.right) return [SHIFT_FINGER.right];
+  const f = fingerOf(k), side = shiftSideFor(k);
+  return [...(f ? [f] : []), ...(side ? [SHIFT_FINGER[side]] : [])];
+}
 /** Open the lesson's briefing before its first exercise, once per lesson per session. */
 function openBrief(): void {
   const briefing = briefingFor(runTrail);
@@ -442,12 +480,21 @@ function briefNext(): void {
   endBrief(true); render(); $('lessonTitle').focus();
 }
 /** A key pressed during a press step: fill its tile; when all are filled, show the check, wait a beat, move on. */
-function briefPress(k: string): void {
+function briefPress(k: string, code = ''): void {
   const t = briefTip();
   if (!brief || !t?.press || briefTimer) return;
-  const key = k.toLowerCase();
-  const tile = $('briefKeys').querySelector<HTMLElement>(`[data-brief-key="${key}"]`);
-  if (!t.press.includes(key) || brief.pressed.has(key)) { const any = $('briefKeys').querySelector<HTMLElement>('.brief-key:not(.filled)'); any?.classList.remove('miss'); void any?.offsetWidth; any?.classList.add('miss'); sound.play('miss'); return; }
+  // A Shift key is its own token; a capital is kept as typed (it names a Shift press); anything else is its lowercase key.
+  const shiftSide = k === 'Shift' ? shiftCodeSide(code) : null;
+  if (k === 'Shift' && !shiftSide) return;
+  const key = shiftSide ? SHIFT_TOKEN[shiftSide] : t.press.includes(k) ? k : k.toLowerCase();
+  const tile = [...$('briefKeys').querySelectorAll<HTMLElement>('[data-brief-key]')].find((x) => x.dataset.briefKey === key);
+  const wrongShift = t.press.includes(key) ? sameHandShift(key) : null;
+  if (wrongShift) toast(`Use ${wrongShift} Shift for ${key}: the opposite hand from the letter`);
+  if (!t.press.includes(key) || brief.pressed.has(key) || wrongShift) {
+    // Holding Shift on its way to a capital is not a miss.
+    if (k === 'Shift') return;
+    const any = $('briefKeys').querySelector<HTMLElement>('.brief-key:not(.filled)'); any?.classList.remove('miss'); void any?.offsetWidth; any?.classList.add('miss'); sound.play('miss'); return;
+  }
   brief.pressed.add(key);
   tile?.classList.add('filled');
   sound.play('fill', 1, 1 + brief.pressed.size * 0.08);
@@ -465,20 +512,31 @@ function paintBrief(): void {
   const ks = [...(t.keys ?? runTrail.newKeys ?? 'fj')];
   // During a press step, only the keys still to press stay lit.
   const lit = t.press ? ks.filter((k) => !brief!.pressed.has(k)) : ks;
-  $('keymap').querySelectorAll<HTMLElement>('[data-key]').forEach((el) => el.classList.toggle('hot', lit.includes(el.dataset.key!)));
-  const perSide = (side: 'left' | 'right') => lit.map((k) => fingerOf(k)).find((f) => f === 'thumb' || f?.startsWith(side[0]!)) ?? null;
+  const litKeys = lit.map(baseKey), litShifts = new Set(lit.flatMap((k) => k === SHIFT_TOKEN.left ? ['left'] : k === SHIFT_TOKEN.right ? ['right'] : [shiftSideFor(k) ?? []].flat()));
+  $('keymap').querySelectorAll<HTMLElement>('[data-key]').forEach((el) => el.classList.toggle('hot', litKeys.includes(el.dataset.key!)));
+  $('keymap').querySelectorAll<HTMLElement>('[data-shift]').forEach((el) => el.classList.toggle('hot', litShifts.has(el.dataset.shift!)));
+  const litFingers = lit.flatMap(briefTokenFingers);
+  const perSide = (side: 'left' | 'right') => litFingers.find((f) => f === 'thumb' || f.startsWith(side[0]!)) ?? null;
   paintHand('left', perSide('left')); paintHand('right', perSide('right'));
-  // Each lit finger's badge shows the key it is being asked for (E above the middle finger, not its home D).
+  // Each lit finger's badge shows the key it is being asked for (E above the middle finger, not its home D; ⇧ over a Shift pinky).
   const active: Partial<Record<string, string>> = {};
-  for (const k of lit) { const f = fingerOf(k); if (f && f !== 'thumb' && !active[f]) active[f] = k; }
+  for (const k of lit) {
+    const f = fingerOf(k), side = k === SHIFT_TOKEN.left ? 'left' : k === SHIFT_TOKEN.right ? 'right' : shiftSideFor(k);
+    if (f && f !== 'thumb' && !active[f]) active[f] = baseKey(k);
+    if (side && !active[SHIFT_FINGER[side]]) active[SHIFT_FINGER[side]] = '⇧';
+  }
   badges(active);
   setHtml($('handInstruction'), '');
 }
 function renderBrief(): void {
   if (!brief) return;
   const { briefing, step } = brief, t = briefTip()!, exs = lessonExercises(runTrail), last = step + 1 === briefing.tips.length;
-  $('lessonTitle').textContent = 'Before you begin';
-  $('lessonCopy').innerHTML = renderCopy(`${briefing.title} — ${briefing.lead}`);
+  $('lessonTitle').textContent = briefing.badge ? briefing.title : 'Before you begin';
+  const card0 = $('briefCard'), eyebrow = $('briefBadge');
+  card0.classList.toggle('brief-card--new', !!briefing.badge);
+  eyebrow.hidden = !briefing.badge; eyebrow.textContent = briefing.badge ?? '';
+  // A new-keys briefing already carries its title as the heading.
+  $('lessonCopy').innerHTML = renderCopy(briefing.badge ? briefing.lead : `${briefing.title} — ${briefing.lead}`);
   $('summaryLabel').textContent = 'This exercise'; $('focusName').innerHTML = renderCopy(`${runExerciseIndex + 1}/${exs.length} · ${runExercise.name}`);
   const nextEx = exs[runExerciseIndex + 1];
   $('gateLabel').textContent = 'Next up'; $('focusInstruction').innerHTML = renderCopy(nextEx ? `${runExerciseIndex + 2}/${exs.length} · ${nextEx.name}` : 'Lesson complete');
@@ -489,7 +547,7 @@ function renderBrief(): void {
   const keysEl = $('briefKeys'), next = $<HTMLButtonElement>('briefNext');
   if (t.press) {
     keysEl.hidden = false; next.hidden = true;
-    keysEl.innerHTML = [...t.press].map((k) => `<span class="brief-key" data-brief-key="${escapeHtml(k)}">${escapeHtml(k === ' ' ? 'Space' : k.toUpperCase())}<small>${escapeHtml(resolveCopy(`{${k}}`))}</small></span>`).join('');
+    keysEl.innerHTML = [...t.press].map((k) => { const { label, finger } = briefTokenLabel(k); return `<span class="brief-key${label.length > 2 || finger.length > 12 ? ' wide' : ''}" data-brief-key="${escapeHtml(k)}">${escapeHtml(label)}<small>${escapeHtml(finger)}</small></span>`; }).join('');
   } else {
     keysEl.hidden = true; keysEl.innerHTML = ''; next.hidden = false;
     $('briefNextLabel').textContent = last ? 'Start typing' : 'Next';
@@ -558,6 +616,14 @@ function typeKey(k: string): void {
     stopPulse(); return finish();
   }
   prompt(); metrics(); keymap(); nextVisual();
+}
+/** The right capital typed with the same-hand Shift: say which Shift it wanted (at most every few seconds). */
+let lastShiftNudge = 0;
+function shiftNudge(k: string): void {
+  const side = k === run.current ? sameHandShift(k) : null;
+  if (!side || performance.now() - lastShiftNudge < 6000) return;
+  lastShiftNudge = performance.now();
+  toast(`${k}: ${side} pinky on ${side} Shift, the opposite hand`);
 }
 function abort(): void { if (run.status !== 'playing') return; sound.play('error'); toast('Run stopped.'); resetRun(); }
 
@@ -785,7 +851,7 @@ function handleIdleOrResult(e: KeyboardEvent): void {
   e.preventDefault();
   // Any key moves on from a result and starts the next passage with that letter; the course-complete home alone waits for Enter.
   if (run.status === 'complete') { continueAfterResult(e.key === ' ' ? undefined : e.key); return; }
-  if (run.status === 'idle') { begin(); typeKey(e.key); }
+  if (run.status === 'idle') { begin(); shiftNudge(e.key); typeKey(e.key); }
 }
 function trapDialog(e: KeyboardEvent, dialog: HTMLElement): void {
   if (e.key !== 'Tab') return;
@@ -802,8 +868,10 @@ document.addEventListener('keydown', (e) => {
     // Only the explicit steps advance: a briefing is meant to be read, so stray typing never skips it.
     // A press step listens for its own keys instead.
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (briefTip()?.press && e.key.length === 1) { e.preventDefault(); briefPress(e.key); }
-    else if (e.key === 'Escape') { e.preventDefault(); endBrief(true); render(); }
+    if (briefTip()?.press && (e.key.length === 1 || e.key === 'Shift')) { e.preventDefault(); if (!e.repeat) briefPress(e.key, e.code); }
+    else if (e.key === 'Shift') return;
+    // A required briefing (new keys) is finished by pressing them, never skipped.
+    else if (e.key === 'Escape') { e.preventDefault(); if (!brief.briefing.required) { endBrief(true); render(); } }
     // Any key advances a text step, so hands never have to leave the home row to reach Enter or the mouse.
     else if (e.key === 'Enter' || e.key === 'ArrowRight' || e.key.length === 1) { e.preventDefault(); briefNext(); }
     return;
@@ -811,7 +879,7 @@ document.addEventListener('keydown', (e) => {
   if (run.status === 'playing') {
     if (e.key === 'Escape') { e.preventDefault(); abort(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
-    if (e.key.length === 1) { e.preventDefault(); typeKey(e.key); }
+    if (e.key.length === 1) { e.preventDefault(); shiftNudge(e.key); typeKey(e.key); }
     return;
   }
   handleIdleOrResult(e);
