@@ -142,7 +142,7 @@ body.brief-open .metrics{visibility:hidden}
 .brief-key small{display:block;font:8px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--soft);margin-top:2px;white-space:nowrap}
 .brief-key.filled{border-style:solid;background:var(--orange);color:#fff;animation:none;transform:scale(1.04)}
 .brief-key.filled small{color:#ffd8c9}
-.brief-key.filled.miss{animation:key-shake .25s ease}
+.brief-key.miss{animation:key-shake .25s ease}
 /* The old spread grew 0→8px while fading out, then shrank back: most visible a quarter and three quarters through. */
 @keyframes key-pulse{0%,50%,100%{opacity:0}0%,25%,75%,100%{transform:scale(1)}25%,75%{opacity:.5}50%{transform:scale(1.06,1.08)}}
 @keyframes key-shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
@@ -169,7 +169,8 @@ body.brief-open .metrics{visibility:hidden}
 .brief-card--new .brief-key{color:#ffb49f}
 .brief-card--new .brief-key small{color:#a3a19a}
 .brief-card--new .brief-key.filled{color:#fff}.brief-card--new .brief-key.filled small{color:#ffd8c9}
-.brief-key.wide{width:auto;min-width:92px;max-width:150px;padding:6px 14px}.brief-key.wide small{white-space:normal;text-align:center;line-height:1.35}
+.brief-key.wide{width:auto;min-width:112px;max-width:170px;padding:8px 14px;white-space:nowrap;align-content:center;gap:4px}.brief-key.wide small{white-space:normal;text-align:center;line-height:1.35;margin-top:0}
+.brief-key.word{font-size:18px}
 @media(max-width:1100px){.brief-card--new .brief-body h3{font-size:24px}.brief-card--new .brief-body p{font-size:15px}}
 /* Shift in the hand hint: its own chip, so the second finger is never missed. */
 .shift-hint{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:4px;background:#fff0e7;color:var(--orange);white-space:nowrap}

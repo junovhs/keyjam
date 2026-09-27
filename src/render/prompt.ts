@@ -143,13 +143,15 @@ export class CanvasPrompt {
    * One letter at its slot. A capital is drawn CAPITAL_SCALE larger and underlined, so a Shift press is visible before
    * it is due; `s` is the cursor's pop, applied on top. Scaling is about the slot's centre, so spacing never changes.
    */
-  private glyph(ch: string, x: number, cy: number, w: number, s: number): void {
+  private glyph(ch: string, x: number, cy: number, w: number, s: number, ink?: string): void {
     const ctx = this.ctx, cap = isCapital(ch), k = s * (cap ? CAPITAL_SCALE : 1);
     if (k === 1) ctx.fillText(ch, x, cy + 1);
     else { ctx.save(); ctx.translate(x + w / 2, cy + 1); ctx.scale(k, k); ctx.fillText(ch, -w / 2, 0); ctx.restore(); }
     if (!cap) return;
-    const uw = w * k, t = Math.max(2, Math.round(this.fontPx * 0.07)), uy = cy + 1 + Math.round(this.fontPx * 0.5 * k);
-    ctx.fillRect(x + w / 2 - uw / 2, uy, uw, t);
+    // The underline sits just below the cursor box (1.4em tall about the glyph), so it stays outside the orange while typing
+    // and never moves as the cursor arrives. It keeps the plain ink, not the white of a glyph inside the box.
+    const uw = w * CAPITAL_SCALE, t = Math.max(2, Math.round(this.fontPx * 0.06)), uy = cy + 1 + Math.round(this.fontPx * 0.78);
+    ctx.save(); if (ink) ctx.fillStyle = ink; ctx.fillRect(x + w / 2 - uw / 2, uy, uw, t); ctx.restore();
   }
 
   /** Reads host size once per resize (outside the frame loop) and re-lays out. */
@@ -299,7 +301,7 @@ export class CanvasPrompt {
         continue;
       }
       ctx.fillStyle = current ? currentInk : colors.ink;
-      this.glyph(g.ch, x, cy, g.w, current ? scale : 1);
+      this.glyph(g.ch, x, cy, g.w, current ? scale : 1, current ? colors.ink : undefined);
     }
     ctx.globalAlpha = 1;
     // A letter that has fallen past the canvas's bottom edge is gone; freeing it lets the loop stop sooner.

@@ -94,7 +94,7 @@ kbd{font:inherit}
 .ch.done{color:#8e8d86}
 .ch.current{min-width:1.4em;min-height:1.4em;background:var(--orange);color:#fff;box-shadow:0 0 0 1px #ff7b4a inset,0 5px 14px rgba(255,84,24,.22);transform:translateY(-1px)}
 .ch.wrong{background:#ffb49f;color:#201814}
-.ch.cap{font-size:1.15em;text-decoration:underline;text-decoration-thickness:.07em;text-underline-offset:.12em}
+.ch.cap{position:relative;font-size:1.15em}.ch.cap::after{content:"";position:absolute;left:12%;right:12%;bottom:-.3em;height:.07em;background:#e8e6df}
 .ch.space{min-width:60px;height:26px;padding:0 10px;border:1px solid #5c5e59;background:#2b2c29;color:#c5c3bc;font-size:10px;line-height:1;letter-spacing:.04em}
 .ch.space.done{background:#222320;color:#74766f}
 .ch.space.current{background:var(--orange);border-color:var(--orange);color:#fff}

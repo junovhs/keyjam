@@ -427,8 +427,10 @@ const BRIEF_ICONS: Record<BriefIcon, string> = {
 /** Which Shift keys are held right now, by physical side (keydown/keyup codes; the event's shiftKey cannot tell them apart). */
 const shiftHeld = new Set<Hand>();
 const shiftCodeSide = (code: string): Hand | null => (code === 'ShiftLeft' ? 'left' : code === 'ShiftRight' ? 'right' : null);
-window.addEventListener('keydown', (e) => { const h = shiftCodeSide(e.code); if (h) shiftHeld.add(h); }, true);
-window.addEventListener('keyup', (e) => { const h = shiftCodeSide(e.code); if (h) shiftHeld.delete(h); }, true);
+// Any key event without Shift held clears the set: an OS can drop a Shift keyup (Windows does with both held), and a stuck
+// side would otherwise judge the next capital against the wrong Shift.
+window.addEventListener('keydown', (e) => { if (!e.shiftKey) shiftHeld.clear(); const h = shiftCodeSide(e.code); if (h) shiftHeld.add(h); }, true);
+window.addEventListener('keyup', (e) => { if (!e.shiftKey) shiftHeld.clear(); const h = shiftCodeSide(e.code); if (h) shiftHeld.delete(h); }, true);
 window.addEventListener('blur', () => shiftHeld.clear());
 /** A capital typed holding only the same-hand Shift: the key it needed instead, else null. */
 function sameHandShift(k: string): Hand | null {
@@ -493,7 +495,9 @@ function briefPress(k: string, code = ''): void {
   if (!t.press.includes(key) || brief.pressed.has(key) || wrongShift) {
     // Holding Shift on its way to a capital is not a miss.
     if (k === 'Shift') return;
-    const any = $('briefKeys').querySelector<HTMLElement>('.brief-key:not(.filled)'); any?.classList.remove('miss'); void any?.offsetWidth; any?.classList.add('miss'); sound.play('miss'); return;
+    // Shake the tile that was attempted (any order is fine), or the next open one for a key that has no tile.
+    const any = tile && !tile.classList.contains('filled') ? tile : $('briefKeys').querySelector<HTMLElement>('.brief-key:not(.filled)');
+    any?.classList.remove('miss'); void any?.offsetWidth; any?.classList.add('miss'); sound.play('miss'); return;
   }
   brief.pressed.add(key);
   tile?.classList.add('filled');
@@ -547,7 +551,7 @@ function renderBrief(): void {
   const keysEl = $('briefKeys'), next = $<HTMLButtonElement>('briefNext');
   if (t.press) {
     keysEl.hidden = false; next.hidden = true;
-    keysEl.innerHTML = [...t.press].map((k) => { const { label, finger } = briefTokenLabel(k); return `<span class="brief-key${label.length > 2 || finger.length > 12 ? ' wide' : ''}" data-brief-key="${escapeHtml(k)}">${escapeHtml(label)}<small>${escapeHtml(finger)}</small></span>`; }).join('');
+    keysEl.innerHTML = [...t.press].map((k) => { const { label, finger } = briefTokenLabel(k); return `<span class="brief-key${label.length > 2 || finger.length > 12 ? ' wide' : ''}${label.length > 2 ? ' word' : ''}" data-brief-key="${escapeHtml(k)}">${escapeHtml(label)}<small>${escapeHtml(finger)}</small></span>`; }).join('');
   } else {
     keysEl.hidden = true; keysEl.innerHTML = ''; next.hidden = false;
     $('briefNextLabel').textContent = last ? 'Start typing' : 'Next';
