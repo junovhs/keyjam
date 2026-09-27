@@ -3,6 +3,8 @@ import type { Finger } from './fingers';
 
 export const FINGER_LEVEL_COUNT = 10;
 export const FINGER_PASS_ACC = 95;
+/** A finger stop is this many pages; each is judged and saved on its own. */
+export const FINGER_PAGES = 3;
 export const fingerCourseId = (id: FingerId): string => `${activeMethod().id}/${id}`;
 export interface FingerLevel { name: string; instruction: string; text: string }
 /** Derive every reach (including shifted punctuation) from the canonical method. */

@@ -4,7 +4,7 @@ import { beatInterval, evenness, onBeat } from './engine/beat';
 import { demoSchedule, demoStepMs, type DemoStep } from './engine/demo';
 import { PACE_NOTE, notePace, paceFactor, paceNoteApplies, typedFast } from './engine/pace';
 import { briefingFor, type BriefIcon, type Briefing } from './curriculum/briefings';
-import { fingerPages, completeFingerPages, FINGER_PAGES, type FingerPractice } from './engine/finger-practice';
+import { fingerPractice, completeFingerPage, FINGER_PAGES, type FingerPractice, type SideScore } from './engine/finger-practice';
 import type { Stop } from './curriculum/stops';
 import { fingerLevels, pairCompleted, FINGER_PASS_ACC, type FingerPair } from './curriculum/finger-course';
 import { MAIN_TRAILS, trailById, allowedChars, gateFor, groveOf, renderCopy, resolveCopy, trailsInGrove, type StageName, type Trail } from './curriculum';
@@ -103,11 +103,11 @@ let mode: Mode = { kind: 'trail' };
 let run = new Run('');
 let outcome: Outcome | null = null;
 let practice: FingerPractice | null = null;
-/** A finger stop's pages, and the runs of the pages already finished (the current page is `run`). */
-let stopPages: FingerPractice[] = [];
-let stopRuns: Run[] = [];
-const stopPage = () => stopRuns.length + 1;
+/** The finger stop page being typed (0-based): each page is judged and saved on its own. */
+const stopPageIndex = (): number => mode.kind !== 'remedial' || stopDone(state, mode.stop) ? 0 : Math.min(state.stopPages[mode.stop.id] ?? 0, FINGER_PAGES - 1);
+const stopPage = () => stopPageIndex() + 1;
 let fingerPassed = false;
+let pagePassed = false;
 /** Coach decisions for the run just finished: [0] may be required (blocks Continue). */
 let decisions: Decision[] = [];
 /** A required decision the player still has to act on before the next trail run. */
@@ -167,8 +167,8 @@ function makeText(): string {
   if (mode.kind === 'explore') return mode.key === ' ' ? '   ' : mode.key.repeat(2) + ' ' + mode.key.repeat(2);
   if (mode.kind === 'slow') return mode.text;
   if (mode.kind === 'remedial') {
-    if (!stopPages.length) stopPages = fingerPages(mode.pair, mode.level, state.fingerCourses, { known: new Set(MAIN_TRAILS.filter(t => isCleared(state, t.id)).flatMap(t => [...t.newKeys])) });
-    practice = stopPages[stopRuns.length]!; return practice.text;
+    practice = fingerPractice(mode.pair, mode.level, state.fingerCourses, { known: new Set(MAIN_TRAILS.filter(t => isCleared(state, t.id)).flatMap(t => [...t.newKeys])), page: stopPageIndex() });
+    return practice.text;
   }
   if (mode.kind === 'coach') {
     const d = mode.decision;
@@ -187,7 +187,7 @@ function resetRun(): void {
   runExerciseIndex = exerciseIndex(state); runExercise = lessonExercises(runTrail, pickFor(runTrail))[runExerciseIndex]!;
   beforeMastery = Object.fromEntries([...allowedChars(runTrail)].map(k => [k.toLowerCase(), keys.mastery(k)]));
   startPulse();
-  practice = null; fingerPassed = false; stopPages = []; stopRuns = [];
+  practice = null; fingerPassed = false; pagePassed = false;
   helpVisible = mode.kind !== 'trail' || runExercise.guidance !== 'on-demand';
   run = new Run(makeText()); outcome = null; decisions = [];
   if (devTraceEnabled) devKnownAtStart = new Set(wordBigrams(run.text).filter((g) => (trans.stat(g)?.seen ?? 0) > 0));
@@ -244,7 +244,7 @@ function labels(): void {
   $('skipGuided').hidden = mode.kind !== 'trail' || !guided() || !!brief;
   $('beginCue').classList.toggle('gone', run.status !== 'idle' || !!brief);
   $('beginCue').textContent = mode.kind === 'trail' ? 'Begin typing when you\'re ready · any key'
-    : mode.kind === 'remedial' ? (stopRuns.length ? `Page ${stopPage()} of ${FINGER_PAGES} · keep going · any key` : `Page 1 of ${FINGER_PAGES} · begin typing when you're ready`)
+    : mode.kind === 'remedial' ? `Page ${stopPage()} of ${FINGER_PAGES} · begin typing when you're ready`
     : 'Begin typing when you\'re ready · a short practice';
 }
 const useDom = new URLSearchParams(location.search).get('dom') === '1';
@@ -262,7 +262,7 @@ function prompt(): void {
 }
 function metrics(): { wpm: number; acc: number; pct: number } {
   const m = run.metrics(now());
-  if (mode.kind === 'remedial' && run.text) m.pct = Math.round(((stopRuns.length + run.pos / run.text.length) / FINGER_PAGES) * 100);
+  if (mode.kind === 'remedial' && run.text) m.pct = Math.round(((stopPageIndex() + run.pos / run.text.length) / FINGER_PAGES) * 100);
   setText($('wpm'), String(m.wpm)); setText($('acc'), guided() ? 'No score' : m.acc + '%'); setText($('pct'), m.pct + '%');
   const combo = $('combo');
   if (combo.textContent !== String(run.combo)) { combo.textContent = String(run.combo); if (run.combo > 0 && run.combo % 10 === 0) { combo.classList.remove('tick'); void combo.offsetWidth; combo.classList.add('tick'); } }
@@ -555,17 +555,9 @@ function typeKey(k: string): void {
   if (pulse && last.correct) $('beatDot').style.setProperty('--fill', onBeat(performance.now(), pulse.t0, pulse.interval).toFixed(2));
   if (r === 'done') {
     canvasPrompt?.onComplete();
-    if (mode.kind === 'remedial' && stopRuns.length < FINGER_PAGES - 1) return nextStopPage();
     stopPulse(); return finish();
   }
   prompt(); metrics(); keymap(); nextVisual();
-}
-/** A finished stop page turns straight to the next one; the result waits for the last page. */
-function nextStopPage(): void {
-  stopRuns.push(run);
-  run = new Run(makeText());
-  sound.play('step');
-  render();
 }
 function abort(): void { if (run.status !== 'playing') return; sound.play('error'); toast('Run stopped.'); resetRun(); }
 
@@ -642,28 +634,27 @@ function finish(): void {
       : mode.kind === 'slow' ? 'Same text, taken slowly. Your lesson is waiting where you left it.'
       : `Guided practice complete. Next: ${outcome?.exercise.nextName ?? 'your next lesson'}. Take this movement at whatever pace feels comfortable.`;
   }
+  let scores: SideScore[] = [];
   if (mode.kind === 'remedial' && practice) {
     const replay = pairCompleted(state.fingerCourses, mode.pair) > mode.level;
-    const before = pairCompleted(state.fingerCourses, mode.pair);
-    fingerPassed = completeFingerPages(state.fingerCourses, mode.pair, mode.level, stopPages, [...stopRuns, run]).passed;
+    const before = pairCompleted(state.fingerCourses, mode.pair), page = stopPageIndex();
+    const judged = completeFingerPage(state.fingerCourses, state.stopPages, mode.stop.id, mode.pair, mode.level, page, practice, run);
+    fingerPassed = judged.stopPassed; pagePassed = judged.pagePassed; scores = judged.scores;
     // UI-16: rows jumps, twisters and the gauntlet each earn this pair a charm.
     const after = pairCompleted(state.fingerCourses, mode.pair);
     if (after > before) newCharm = fingerCharmAt(mode.pair.id, after) ?? null;
-    title = replay ? 'Finger stop revisited.' : fingerPassed ? `${mode.pair.name}, steady.` : 'A little more practice here.';
+    title = replay ? 'Finger stop revisited.' : fingerPassed ? `${mode.pair.name}, steady.` : pagePassed ? `Page ${page + 1} of ${FINGER_PAGES} saved.` : 'A little more practice here.';
     copy = replay ? 'A passed stop stays passed. Your course is waiting where you left it.'
-      : fingerPassed ? 'Both hands passed. Your progress is saved, and your course continues.'
-      : `Each hand needs ${FINGER_PASS_ACC}% on its own keys. Your next pass focuses on the movements that slipped.`;
+      : fingerPassed ? `All ${FINGER_PAGES} pages passed. Your progress is saved, and your course continues.`
+      : pagePassed ? `Both hands reached ${FINGER_PASS_ACC}%. Next is page ${page + 2}: ${page + 1 === 1 ? 'the same keys in new shapes' : 'these keys in real words'}.`
+      : `Each hand needs ${FINGER_PASS_ACC}% on its own keys. ${page ? `Your ${page === 1 ? 'first page is' : `first ${page} pages are`} saved; only` : 'Only'} this page runs again.`;
   }
   const newly = guided() ? [] : [...allowedChars(t)].filter(k => k === k.toLowerCase()).filter(k => keys.mastery(k) >= MASTERED && (beforeMastery[k] ?? 0) < MASTERED);
   $('resultMastery').textContent = newly.length ? `Settled this time: ${newly.map(k => k === ' ' ? 'Space' : k.toUpperCase()).join(' · ')}` : `${run.hits} characters typed · ${run.errors === 0 ? 'no missed keys' : `${run.errors} missed ${run.errors === 1 ? 'key' : 'keys'}`}`;
   if (guided()) $('resultMastery').textContent = 'Slow is welcome. Let your hands stay easy.';
-  // A stop's numbers cover all of its pages, not just the last one.
-  let acc = m.acc;
-  if (mode.kind === 'remedial') {
-    const all = [...stopRuns, run], hits = all.reduce((a, r) => a + r.hits, 0), errors = all.reduce((a, r) => a + r.errors, 0);
-    acc = accOf(all.reduce((a, r) => a + r.scoredHits, 0), all.reduce((a, r) => a + r.scoredAttempts, 0));
-    $('resultMastery').textContent = `${all.length} pages · ${hits} characters typed · ${errors === 0 ? 'no missed keys' : `${errors} missed ${errors === 1 ? 'key' : 'keys'}`}`;
-  }
+  const acc = m.acc;
+  // A stop page shows each hand's own accuracy: that, not the total, is what passes it.
+  if (mode.kind === 'remedial' && scores.length) $('resultMastery').textContent = scores.map(sc => `${fingerById(sc.id)!.full} ${sc.acc}%${sc.passed ? ' ✓' : ` · needs ${FINGER_PASS_ACC}%`}`).join('   ·   ');
   // Spec F5: a beat run is judged for evenness only — one word and three bars, never a number.
   if (runExercise.beat) { const e = evenness(run.strokes.slice(1).filter(x => x.correct).map(x => x.latencyMs)); $('resultMastery').textContent = `${e.word} ${e.bars}`; }
   $('result').querySelector<HTMLElement>('.score')!.hidden = guided();
@@ -695,7 +686,7 @@ function finish(): void {
   $('skipPractice').hidden = !gate;
   $('skipPractice').textContent = 'Try the passage instead';
   if (mode.kind === 'remedial') {
-    $('nextAction').textContent = stopDone(state, mode.stop) ? `Next: ${stepName(trail())}` : 'Try this stop again';
+    $('nextAction').textContent = stopDone(state, mode.stop) ? `Next: ${stepName(trail())}` : pagePassed ? `Next: page ${stopPage()} of ${FINGER_PAGES}` : 'Try this page again';
     $('skipPractice').hidden = true;
   }
   if (mode.kind === 'explore') { $('nextAction').textContent = 'Try this key again'; $('skipPractice').hidden = false; $('skipPractice').textContent = 'Back to my lesson'; }
@@ -727,7 +718,7 @@ function finish(): void {
     strokes: run.strokes.map((s) => ({ ...s })),
   });
   // The result's chime, a beat after the passage's own burst: the keepsake sparkle outranks a lesson clear outranks a pass.
-  const chime: CueName = mode.kind === 'remedial' ? (fingerPassed ? 'complete' : 'settle') : earned ? 'sparkle' : outcome?.firstClear ? 'clear' : outcome?.passed ? 'complete' : 'settle';
+  const chime: CueName = mode.kind === 'remedial' ? (fingerPassed || pagePassed ? 'complete' : 'settle') : earned ? 'sparkle' : outcome?.firstClear ? 'clear' : outcome?.passed ? 'complete' : 'settle';
   setTimeout(() => sound.play(chime), 260);
   save(); arena().classList.add('result-mode'); document.body.classList.add('showing-result');
   $('resultTitle').focus();

@@ -3,13 +3,12 @@ import { VOCABULARY } from '../curriculum/headline';
 import { rng, shuffle } from './rng';
 import { fingerById } from '../curriculum/fingers';
 import { baseKey, fingerOf, type FingerId } from '../curriculum/method';
-import { fingerLevels, fingerCourseId, pairCompleted, FINGER_PASS_ACC, type FingerPair } from '../curriculum/finger-course';
+import { fingerLevels, fingerCourseId, pairCompleted, FINGER_PASS_ACC, FINGER_PAGES, type FingerPair } from '../curriculum/finger-course';
+export { FINGER_PAGES };
 import type { Run } from './run';
 
 /** Require enough correct target presses to distinguish familiarity from a few lucky hits. */
 export const MIN_FINGER_HITS = 20;
-/** A finger stop is this many pages typed back to back, judged together. */
-export const FINGER_PAGES = 3;
 /** Snapshot of the sides deliberately exercised by this passage; incidental word letters cannot earn a level. */
 export interface FingerPractice { text: string; sides: readonly FingerId[]; helperKeys: string[] }
 
@@ -25,13 +24,52 @@ export function fingerPractice(pair: FingerPair, level: number, progress: Readon
   const helperKeys: string[] = [];
 
   if (level < 4) {
+    // Each page is its own kind of drill (page 1 the level's reaches, page 2 new shapes, page 3 real words), not one pattern three times.
+    const len = level === 3 ? 36 : 24, kind = page % FINGER_PAGES;
+    const keysAt = (id: FingerId) => { const f = fingerById(id)!; return level === 0 ? [f.anchor] : [...new Set(fingerLevels(f)[level]!.text.replaceAll(' ', ''))]; };
+    const count = (w: string, id: FingerId) => [...w].filter(k => fingerOf(k) === id).length;
+    if (kind === 2) {
+      const vocab = [...new Set([...FINGER_TWISTERS[pair.id].words, ...VOCABULARY])].filter(w => w.length >= 3 && /^[a-z]+$/.test(w) && [...w].every(k => allowed.has(k)));
+      const pools = sides.map(id => {
+        const ks = keysAt(id).filter(k => /[a-z]/.test(k));
+        return shuffle(vocab.filter(w => ks.some(k => w.includes(k))).sort((a, b) => count(b, id) / b.length - count(a, id) / a.length).slice(0, 24), r);
+      });
+      if (pools.every(p => p.length >= 4)) {
+        const words: string[] = [], have = sides.map(() => 0);
+        for (let i = 0; have.some(h => h < len) && i < 400; i++) {
+          const side = i % sides.length;
+          if (have[side]! >= len) continue;
+          const pool = pools[side]!, w = pool[Math.floor(i / sides.length) % pool.length]!;
+          words.push(w); sides.forEach((id, j) => { have[j] = have[j]! + count(w, id); });
+        }
+        return { text: words.join(' '), sides, helperKeys };
+      }
+    }
+    if (kind >= 1) {
+      const shapes = ['akak', 'kaka', 'aakk', 'kkaa', 'kaak', 'akka'];
+      const shape = (sh: string, a: string, k: string) => [...sh].map(c => (c === 'a' ? a : k)).join('');
+      const tokens: string[] = [];
+      if (level === 0 && sides.length === 2) {
+        // Landmarks only: trade the two home keys between hands in changing shapes.
+        const [a, b] = sides.map(id => fingerById(id)!.anchor) as [string, string];
+        while (tokens.length * 2 < len) tokens.push(shape(shapes[Math.floor(r() * 5)]!, a, b));
+        return { text: tokens.join(' '), sides, helperKeys };
+      }
+      if (level > 0) {
+        const per = sides.map(id => {
+          const a = fingerById(id)!.anchor, ks = keysAt(id).filter(k => k !== a), out: string[] = [];
+          while (out.length * 4 < len) out.push(shape(shapes[Math.floor(r() * 5)]!, a, ks[Math.floor(r() * ks.length)] ?? a));
+          return out;
+        });
+        for (let i = 0; i < Math.max(...per.map(p => p.length)); i++) for (const p of per) if (p[i]) tokens.push(p[i]!);
+        return { text: tokens.join(' '), sides, helperKeys };
+      }
+    }
     const passages = sides.map(id => {
       const f = fingerById(id)!;
-      const len = level === 3 ? 36 : 24;
       if (level === 0) return f.anchor.repeat(len).match(/.{1,6}/g)!;
       let text = fingerLevels(f)[level]!.text.replaceAll(' ', '');
-      // Later pages deal the level's own four-key reaches in a fresh order, every reach once per round, and start
-      // `page` keys into the cycle, so even a level with a single reach groups differently on each page.
+      // A retried page deals the level's own four-key reaches in a fresh order, starting `page` keys into the cycle.
       if (page > 0) {
         const reaches = [...new Set(fingerLevels(f)[level]!.text.split(' '))];
         text = '';
@@ -131,4 +169,35 @@ export function completeFingerPages(
     }
   }
   return { passed: pairCompleted(progress, pair) > level, newlyPassed };
+}
+
+export interface SideScore { id: FingerId; hits: number; attempts: number; acc: number; passed: boolean }
+/** One page's score for each side it exercised, counted on that side's own keys only. */
+export function sideScores(pair: FingerPair, practice: FingerPractice, run: PageRun): SideScore[] {
+  return practice.sides.filter(id => pair.sides.includes(id as Exclude<FingerId, 'thumb'>)).map(id => {
+    const strokes = run.strokes.filter(s => fingerOf(s.key) === id), hits = strokes.filter(s => s.correct).length;
+    // Exact ratio: 94.6% must not pass because the display rounds it to 95%.
+    return { id, hits, attempts: strokes.length, acc: strokes.length ? Math.floor((hits / strokes.length) * 100) : 100, passed: hits >= MIN_PAGE_HITS && hits * 100 >= strokes.length * FINGER_PASS_ACC };
+  });
+}
+/** Correct presses a side needs on one page. */
+export const MIN_PAGE_HITS = 12;
+/**
+ * Judge one page of a stop on its own. A page passes when every side it exercised reaches the target; a passed page is
+ * saved in `pages`, and the last one credits the level to both sides. Earned records never go down.
+ */
+export function completeFingerPage(
+  progress: Record<string, number>, pages: Record<string, number>, stopId: string, pair: FingerPair, level: number,
+  page: number, practice: FingerPractice, run: PageRun,
+): { pagePassed: boolean; stopPassed: boolean; scores: SideScore[] } {
+  const scores = sideScores(pair, practice, run);
+  const pagePassed = run.status === 'complete' && run.text === practice.text && scores.length > 0 && scores.every(s => s.passed);
+  if (pagePassed && pairCompleted(progress, pair) <= level) {
+    pages[stopId] = Math.max(pages[stopId] ?? 0, page + 1);
+    if (pages[stopId]! >= FINGER_PAGES) {
+      for (const id of pair.sides) if ((progress[fingerCourseId(id)] ?? 0) <= level) progress[fingerCourseId(id)] = level + 1;
+      delete pages[stopId];
+    }
+  }
+  return { pagePassed, stopPassed: pairCompleted(progress, pair) > level, scores };
 }

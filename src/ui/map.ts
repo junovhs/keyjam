@@ -61,7 +61,7 @@ export function renderMap(root: HTMLElement, state: SaveV6, h: MapHandlers, grov
     const stop = STOPS.find(s => s.id === el?.dataset.stop);
     if (stop) {
       const l = levelOf(stop);
-      box.innerHTML = `<span class="eyebrow">Finger stop · level ${stop.level + 1} of 10</span><h4>${esc(stop.pair.name)} · ${esc(l.name)}</h4><p>${esc(resolveCopy(l.instruction))}</p><small>${stopDone(state, stop) ? 'Passed · click to replay' : stopOpen(state, stop) ? '95% for each finger · click to start' : 'Opens after its lesson'}</small>`;
+      box.innerHTML = `<span class="eyebrow">Finger stop · level ${stop.level + 1} of 10</span><h4>${esc(stop.pair.name)} · ${esc(l.name)}</h4><p>${esc(resolveCopy(l.instruction))}</p><small>${stopDone(state, stop) ? 'Passed · click to replay' : stopOpen(state, stop) ? `${state.stopPages[stop.id] ? `${state.stopPages[stop.id]} of 3 pages saved · ` : ''}95% for each hand · click to start` : 'Opens after its lesson'}</small>`;
     } else if (t) {
       box.innerHTML = `<span class="eyebrow">${t.checkpoint ? 'Checkpoint' : `Lesson ${t.n}`}</span><h4>${esc(t.name)}</h4><p>${esc(resolveCopy(t.blurb ?? ''))}</p><small>${isCleared(state, t.id) ? 'Complete · click to revisit' : trailUnlocked(state, t) ? `${state.lessonSteps[t.id] ?? 0} of ${lessonExercises(t).length} exercises · click to start` : 'Locked · finish what comes before it'}</small>`;
     } else box.innerHTML = `<span class="eyebrow">Chapter ${chosen.n}</span><p>${esc(resolveCopy(chosen.blurb))}</p><small>Hover a lesson or finger stop to see what it practises. One click starts it.</small>`;
