@@ -128,7 +128,7 @@ export class CanvasPrompt {
   private font(): string { return `600 ${this.fontPx}px ${getComputedStyle(this.host).getPropertyValue('--mono') || 'ui-monospace, monospace'}`; }
   private lineHeight(): number { return Math.round(this.fontPx * (this.compact ? 1.9 : 1.75)); }
   /** Gap between glyphs. Must exceed 2× the current-box padding so the box never touches a neighbour. */
-  private letterSpacing(): number { return this.state.reading ? 2 : Math.round(this.fontPx * (this.compact ? 0.5 : 0.32)); }
+  private letterSpacing(): number { return this.state.reading ? Math.round(this.fontPx * 0.3) : Math.round(this.fontPx * (this.compact ? 0.5 : 0.32)); }
   private boxPad(): number { return Math.round(this.fontPx * 0.2); }
   /** A Space pill inside its widened slot, inset so a neighbour's cursor box (pad past the letter) always leaves a gap. */
   private spacePill(g: { x: number; w: number }): { x: number; w: number; h: number } {
