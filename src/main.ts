@@ -470,6 +470,10 @@ function endBrief(read = false): void {
   arena().classList.remove('brief-mode'); document.body.classList.remove('brief-open');
   $('briefCard').hidden = true;
   $('keymap').querySelectorAll('.keycap.hot').forEach((x) => x.classList.remove('hot'));
+  $('keymap').querySelectorAll('.radiate').forEach((x) => x.classList.remove('radiate'));
+  fingerLabels().forEach((x) => x.classList.remove('radiate'));
+  coachNote = '';
+  if (coachPulsing) { pulseFinger(null); coachPulsing = false; }
 }
 let briefTimer: ReturnType<typeof setTimeout> | null = null;
 const briefTip = () => brief?.briefing.tips[brief.step] ?? null;
@@ -478,8 +482,58 @@ const briefWaiting = (): boolean => { const t = briefTip(); return !!t?.press &&
 function briefNext(): void {
   if (!brief || briefWaiting()) return;
   sound.play('step');
-  if (brief.step + 1 < brief.briefing.tips.length) { brief.step++; brief.pressed = new Set(); renderBrief(); paintBrief(); return; }
+  if (brief.step + 1 < brief.briefing.tips.length) { brief.step++; brief.pressed = new Set(); coachNote = ''; renderBrief(); paintBrief(); return; }
   endBrief(true); render(); $('lessonTitle').focus();
+}
+// ---- the capital walkthrough: a press step that asks for capitals coaches each one finger by finger ----------------
+/** Capitals the current press step asks for. Each is walked through: the Shift pinky first, then (still holding) the letter. */
+const coachCaps = (): string[] => { const t = briefTip(); return t?.press ? [...t.press].filter((k) => shiftSideFor(k)) : []; };
+/** The note under the steps: a success, or what to change. Cleared by the next Shift press. */
+let coachNote = '';
+/** Whether the coach is pulsing a finger (so a later plain paint knows to stop it). */
+let coachPulsing = false;
+/** The capital being walked: the open one whose Shift is held, else the first open one. Any order is fine. */
+function coachTarget(): string | null {
+  const open = coachCaps().filter((k) => !brief?.pressed.has(k));
+  return open.find((k) => shiftHeld.has(shiftSideFor(k)!)) ?? open[0] ?? null;
+}
+const cap1 = (s: string): string => s[0]!.toUpperCase() + s.slice(1);
+/** The two numbered steps for the target capital, live: step 1 turns to a check the moment the right Shift is held. */
+function renderCoach(): void {
+  const el = $('briefCoach');
+  const caps = coachCaps(), k = caps.length ? coachTarget() : null;
+  if (!caps.length) { el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  const note = (cls: string, text: string) => `<p class="coach-note ${cls}">${escapeHtml(text)}</p>`;
+  if (!k) { el.innerHTML = coachNote ? note('ok', coachNote) : ''; return; }
+  const need = shiftSideFor(k)!, other: Hand = need === 'left' ? 'right' : 'left', held = shiftHeld.has(need);
+  const letterFinger = fingerById(fingerOf(k)!)?.full ?? 'The other hand';
+  const kbd = (x: string) => `<kbd class="keycap-inline">${escapeHtml(x)}</kbd>`;
+  const step = (n: number, cls: string, html: string) => `<div class="coach-step ${cls}"><b>${cls === 'done' ? '✓' : n}</b><span>${html}</span></div>`;
+  el.innerHTML = `<div class="coach-for">Capital ${kbd(k)}</div>`
+    + step(1, held ? 'done' : 'now', held ? `<strong>${cap1(need)} pinky</strong> is holding ${need} ${kbd('Shift')}. Keep it down.` : `<strong>${cap1(need)} pinky</strong>: press and hold ${need} ${kbd('Shift')}.`)
+    + step(2, held ? 'now' : 'next', held ? `Now, still holding, <strong>${escapeHtml(letterFinger)}</strong> presses ${kbd(k)}.` : `Then <strong>${escapeHtml(letterFinger)}</strong> presses ${kbd(k)}.`)
+    + (coachNote ? note(coachNote.startsWith('✓') ? 'ok' : 'fix', coachNote)
+      : shiftHeld.size && !held ? note('fix', `That is ${other} Shift, on the same hand as ${k}. Let it go and use your ${need} pinky on ${need} Shift.`) : '');
+}
+/** Light and pulse only the finger to add next: the Shift pinky, then (once it holds) the letter's finger. False when not coaching. */
+function paintCoach(): boolean {
+  const k = coachCaps().length ? coachTarget() : null;
+  const map = $('keymap');
+  map.querySelectorAll('.radiate').forEach((x) => x.classList.remove('radiate'));
+  fingerLabels().forEach((x) => x.classList.remove('radiate'));
+  if (!k) { if (coachPulsing) { pulseFinger(null); coachPulsing = false; } return false; }
+  const need = shiftSideFor(k)!, held = shiftHeld.has(need), pinky = SHIFT_FINGER[need], f = fingerOf(k)!;
+  const shiftCap = map.querySelector<HTMLElement>(`[data-shift="${need}"]`), letterCap = map.querySelector<HTMLElement>(`[data-key="${CSS.escape(baseKey(k))}"]`);
+  map.querySelectorAll<HTMLElement>('[data-key],[data-shift]').forEach((el) => el.classList.toggle('hot', el === shiftCap || (held && el === letterCap)));
+  paintHand(need, pinky); paintHand(need === 'left' ? 'right' : 'left', held ? f : null);
+  badges(held ? { [pinky]: '⇧', [f]: baseKey(k) } : { [pinky]: '⇧' });
+  const add = held ? f : pinky;
+  (held ? letterCap : shiftCap)?.classList.add('radiate');
+  fingerLabels().find((x) => x.dataset.fingerLabel === add)?.classList.add('radiate');
+  pulseFinger(add); coachPulsing = true;
+  setHtml($('handInstruction'), '');
+  return true;
 }
 /** A key pressed during a press step: fill its tile; when all are filled, show the check, wait a beat, move on. */
 function briefPress(k: string, code = ''): void {
@@ -489,18 +543,29 @@ function briefPress(k: string, code = ''): void {
   const shiftSide = k === 'Shift' ? shiftCodeSide(code) : null;
   if (k === 'Shift' && !shiftSide) return;
   const key = shiftSide ? SHIFT_TOKEN[shiftSide] : t.press.includes(k) ? k : k.toLowerCase();
-  const tile = [...$('briefKeys').querySelectorAll<HTMLElement>('[data-brief-key]')].find((x) => x.dataset.briefKey === key);
+  const coaching = coachCaps().length > 0;
+  // A new Shift press starts the next attempt: the last attempt's note has been read.
+  if (shiftSide) coachNote = '';
+  // A letter pressed with no Shift down, where its capital is wanted: the coach says to hold Shift first.
+  const bare = !shiftSide && coaching && !shiftHeld.size && coachCaps().includes(k.toUpperCase()) && !brief.pressed.has(k.toUpperCase()) ? k.toUpperCase() : null;
+  if (bare) { const need = shiftSideFor(bare)!; coachNote = `Shift first: hold ${need} Shift with your ${need} pinky, then press ${bare} while it is still down.`; }
+  const tile = [...$('briefKeys').querySelectorAll<HTMLElement>('[data-brief-key]')].find((x) => x.dataset.briefKey === (bare ?? key));
   const wrongShift = t.press.includes(key) ? sameHandShift(key) : null;
-  if (wrongShift) toast(`Use ${wrongShift} Shift for ${key}: the opposite hand from the letter`);
+  if (wrongShift && !coaching) toast(`Use ${wrongShift} Shift for ${key}: the opposite hand from the letter`);
   if (!t.press.includes(key) || brief.pressed.has(key) || wrongShift) {
-    // Holding Shift on its way to a capital is not a miss.
-    if (k === 'Shift') return;
+    // Holding Shift on its way to a capital is not a miss; the coach moves on to the letter.
+    if (k === 'Shift') { paintBrief(); return; }
+    paintBrief();
     // Shake the tile that was attempted (any order is fine), or the next open one for a key that has no tile.
     const any = tile && !tile.classList.contains('filled') ? tile : $('briefKeys').querySelector<HTMLElement>('.brief-key:not(.filled)');
     any?.classList.remove('miss'); void any?.offsetWidth; any?.classList.add('miss'); sound.play('miss'); return;
   }
   brief.pressed.add(key);
   tile?.classList.add('filled');
+  if (coaching && coachCaps().includes(key)) {
+    const next = coachCaps().find((c) => !brief!.pressed.has(c));
+    coachNote = `✓ Yes, exactly that: one hand held Shift, the other pressed ${key}. Let go of both${next ? `, then do ${next} the same way` : ''}.`;
+  }
   sound.play('fill', 1, 1 + brief.pressed.size * 0.08);
   paintHand('left', null); paintHand('right', null); paintBrief();
   if (!briefWaiting()) {
@@ -513,6 +578,8 @@ function briefPress(k: string, code = ''): void {
 function paintBrief(): void {
   if (!brief) return;
   const t = briefTip()!;
+  renderCoach();
+  if (paintCoach()) return;
   const ks = [...(t.keys ?? runTrail.newKeys ?? 'fj')];
   // During a press step, only the keys still to press stay lit.
   const lit = t.press ? ks.filter((k) => !brief!.pressed.has(k)) : ks;
@@ -888,6 +955,8 @@ document.addEventListener('keydown', (e) => {
   }
   handleIdleOrResult(e);
 });
+// Releasing Shift mid-walkthrough steps the coach back to "hold Shift".
+document.addEventListener('keyup', (e) => { if (brief && e.key === 'Shift' && coachCaps().length) paintBrief(); });
 $('prompt').onclick = () => { if (run.status === 'idle' && !brief) begin(); };
 $('guideToggle').onclick = () => { helpVisible = !helpVisible; labels(); keymap(); nextVisual(); $('lessonTitle').focus(); };
 $('exploreKeyboard').onclick = () => {
