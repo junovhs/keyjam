@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { fresh, sanitize } from '../state/save';
-import { applyRun, currentStage, currentTrail, exerciseIndex, groveOpen } from './progress';
+import { applyRun, blockingStop, currentStage, currentTrail, exerciseIndex, groveOpen, openEverything, trailUnlocked } from './progress';
 import { lessonExercises } from '../curriculum/lesson-flow';
 import { mergeProgress } from '../state/progress-sync';
-import { trailById } from '../curriculum';
+import { MAIN_TRAILS, TRAILS, trailById } from '../curriculum';
 import { KeyModel } from './keymodel';
 const T = 1_700_000_000_000;
 const ANCHORS = lessonExercises(trailById('anchors'));
@@ -63,5 +63,19 @@ describe('visible exercises: every pass means progress', () => {
     const merged = mergeProgress(s, reloaded);
     expect(merged.lessonSteps.anchors).toBe(2); expect(merged.trails.anchors!.cleared).toBe(false);
     expect(sanitize(merged)).toEqual(merged);
+  });
+});
+
+describe('dev sandbox (?dev)', () => {
+  it('opens every chapter, lesson and stop on a fresh save without marking anything done', () => {
+    const s = fresh();
+    expect(TRAILS.every((t) => trailUnlocked(s, t))).toBe(false);
+    openEverything();
+    try {
+      expect(TRAILS.every((t) => groveOpen(s, t.grove) && trailUnlocked(s, t) && !blockingStop(s, t))).toBe(true);
+      expect(MAIN_TRAILS.some((t) => s.trails[t.id]?.cleared)).toBe(false);
+      s.trail = 'opposite-shift';
+      expect(exerciseIndex(s)).toBe(0);
+    } finally { openEverything(false); }
   });
 });

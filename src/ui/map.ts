@@ -3,7 +3,7 @@ import { GROVES, TRAILS, resolveCopy, trailsInGrove, type Grove, type Trail } fr
 import { fingerLevels, pairCompleted, type FingerPair } from '../curriculum/finger-course';
 import { fingerById } from '../curriculum/fingers';
 import { STOPS, stopsAfter, type Stop } from '../curriculum/stops';
-import { groveOpen, isCleared, stopDone, trailUnlocked } from '../engine/progress';
+import { everythingIsOpen, groveOpen, isCleared, stopDone, trailUnlocked } from '../engine/progress';
 import type { SaveV6 } from '../state/save';
 import { escapeHtml as esc } from './dom';
 import { keepsakeFor, owns } from '../engine/keepsakes';
@@ -14,7 +14,7 @@ export interface MapHandlers { onSelect(trail: Trail): void; onStop(stop: Stop):
 
 const levelOf = (stop: Stop) => fingerLevels(fingerById(stop.pair.sides[0])!)[stop.level]!;
 /** A stop can run once its lesson is cleared and the pair has passed the level before it. */
-export const stopOpen = (s: SaveV6, stop: Stop): boolean => isCleared(s, stop.after) && pairCompleted(s.fingerCourses, stop.pair) >= stop.level;
+export const stopOpen = (s: SaveV6, stop: Stop): boolean => everythingIsOpen() || isCleared(s, stop.after) && pairCompleted(s.fingerCourses, stop.pair) >= stop.level;
 /** Four bars, pinky to index, with this pair's bar lit: which fingers a stop drills, at a glance. */
 const PAIR_ORDER: readonly FingerPair['id'][] = ['pinky', 'ring', 'middle', 'index'];
 const glyph = (pair: FingerPair) => `<span class="pair-glyph" aria-hidden="true">${PAIR_ORDER.map(id => `<i class="${id === pair.id ? 'on' : ''}"></i>`).join('')}</span>`;

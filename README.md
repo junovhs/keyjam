@@ -16,7 +16,7 @@ npm test
 npm run build
 ```
 
-TypeScript 7 native compiler, Vite, vanilla DOM/SVG UI, and a canvas typing prompt laid out with Pretext. `?dom=1` enables the diagnostic DOM prompt. `?dev=1` keeps a session trace of every run (`keyjam.dev.report()` in the console), including how much of each exercise the lesson warmed up. The About panel and static `/docs/` pages share `src/docs-content.ts` through dopedocs.
+TypeScript 7 native compiler, Vite, vanilla DOM/SVG UI, and a canvas typing prompt laid out with Pretext. `?dom=1` enables the diagnostic DOM prompt. `?dev` opens a dev sandbox: every chapter, lesson and finger stop is open from its start, all charms show, a dev bar jumps or passes exercises, and progress is kept in that tab only (the real save, account and sync are untouched). It also keeps a session trace of every run (`keyjam.dev.report()` in the console), including how much of each exercise the lesson warmed up. The About panel and static `/docs/` pages share `src/docs-content.ts` through dopedocs.
 
 Guest learning persists locally in a separate save. The optional account uses Supabase; see [account setup](docs/accounts.md). Never put privileged credentials in the browser build.
 

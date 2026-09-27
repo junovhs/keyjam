@@ -1,5 +1,5 @@
 /**
- * How prepared an exercise's movements are, for the ?dev=1 trace and curriculum tests (dev-only, never shown).
+ * How prepared an exercise's movements are, for the ?dev trace and curriculum tests (dev-only, never shown).
  *
  *   warmedNow    — the bigram already appeared earlier in this lesson attempt
  *   knownAlready — not warmed now, but the learner has prior evidence for it

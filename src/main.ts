@@ -15,7 +15,7 @@ import { TransitionModel } from './engine/transitions';
 import { decide, sessionReview, type Decision } from './engine/coach';
 import { missedTarget, classifyRun, rollTally } from './engine/errors';
 import { STOPS } from './curriculum/stops';
-import { applyRun, blockingStop, currentStage, pendingStop, stopDone, currentTrail, exerciseIndex, focusKeys, isCleared, pathIndex, pathLength, progressOf, type Outcome } from './engine/progress';
+import { applyRun, openEverything, blockingStop, currentStage, pendingStop, stopDone, currentTrail, exerciseIndex, focusKeys, isCleared, pathIndex, pathLength, progressOf, type Outcome } from './engine/progress';
 import { Run } from './engine/run';
 import { accOf } from './engine/scoring';
 import { recordPerformance } from './engine/learning';
@@ -46,17 +46,30 @@ type Mode = { kind: 'trail' } | { kind: 'remedial'; pair: FingerPair; level: num
 // Guests have a separate durable save. Account state never leaks into a
 // signed-out session; first signup carries the current guest course forward.
 const accountService = shippedConfig();
-let signedIn = accountService !== null && hasStoredSession(accountService);
-let state: SaveV6 = signedIn ? load() : loadGuest();
-if (!signedIn) clearStored();
+/**
+ * Dev sandbox: add ?dev to the URL. Every chapter, lesson and finger stop opens from its start, every charm shows, and a
+ * dev bar can jump or pass exercises. It keeps its own save in this tab only (sessionStorage): the real guest save, the
+ * account and its sync are never read or written. The run trace below is on too.
+ */
+const devSandbox = new URLSearchParams(location.search).has('dev');
+const SANDBOX_KEY = 'keyjam.dev-sandbox.v1';
+function loadSandbox(): SaveV6 {
+  try { const raw = sessionStorage.getItem(SANDBOX_KEY); if (raw) return sanitize(JSON.parse(raw)); } catch { /* start fresh */ }
+  const s = fresh(); s.settings.onboarded = true; s.settings.codeGrove = true;
+  return s;
+}
+if (devSandbox) openEverything();
+let signedIn = !devSandbox && accountService !== null && hasStoredSession(accountService);
+let state: SaveV6 = devSandbox ? loadSandbox() : signedIn ? load() : loadGuest();
+if (!signedIn && !devSandbox) clearStored();
 setMethod(state.settings.method);
 
 /**
- * Dev-only experience journal. Add ?dev=1 to any build to keep an exact, session-scoped
+ * Dev-only experience journal, on in the ?dev sandbox. Add ?dev to any build to keep an exact, session-scoped
  * record of the prompts shown and the strokes/results produced. Nothing is sent anywhere.
  * Console: keyjam.dev.report() / keyjam.dev.clear()
  */
-const devTraceEnabled = new URLSearchParams(location.search).has('dev');
+const devTraceEnabled = devSandbox;
 const DEV_TRACE_KEY = 'keygrove.dev-runs.v1';
 const devRuns: unknown[] = (() => {
   if (!devTraceEnabled) return [];
@@ -96,7 +109,11 @@ function clearDevReport(): void {
 }
 
 /** Keep the current course durable, including during an optional replay. */
-function store(): void { const copy = replayReturn ? { ...state, trail: replayReturn } : state; if (signedIn) persist(copy); else saveGuest(copy); }
+function store(): void {
+  const copy = replayReturn ? { ...state, trail: replayReturn } : state;
+  if (devSandbox) { try { sessionStorage.setItem(SANDBOX_KEY, JSON.stringify(copy)); } catch { /* sandbox lasts this page only */ } return; }
+  if (signedIn) persist(copy); else saveGuest(copy);
+}
 let keys = KeyModel.fromJSON(state.keys, state.confusions);
 let trans = TransitionModel.fromJSON(state.transitions);
 let mode: Mode = { kind: 'trail' };
@@ -410,6 +427,7 @@ function render(): void {
   // The Shift lesson keeps Shift in the spotlight: the lit Shift cap and its hint pulse throughout.
   document.body.classList.toggle('shift-lesson', mode.kind === 'trail' && !!runTrail.shift);
   header(); labels(); prompt(); metrics(); keymap(); nextVisual(); if (brief) renderBrief();
+  if (devSandbox) devBar();
 }
 
 // ---- briefing: a few steps before a lesson, read one at a time ------------------
@@ -867,8 +885,8 @@ let mapKeys: ((e: KeyboardEvent) => void) | null = null;
 type BookView = 'course' | 'keepsakes';
 // Cosmetic console cheat: deliberately separate from saved/synced learning evidence.
 const charmCheatKey = 'keyjam:unlock-all-charms';
-let allCharmsUnlocked = false;
-try { allCharmsUnlocked = localStorage.getItem(charmCheatKey) === '1'; } catch { /* Session-only if storage is unavailable. */ }
+let allCharmsUnlocked = devSandbox;
+try { allCharmsUnlocked ||= localStorage.getItem(charmCheatKey) === '1'; } catch { /* Session-only if storage is unavailable. */ }
 function setCharmCheat(enabled: boolean): string {
   allCharmsUnlocked = enabled;
   try {
@@ -964,6 +982,41 @@ $('exploreKeyboard').onclick = () => {
   else { if (replayReturn) { state.trail = replayReturn; replayReturn = null; } mode = { kind: 'explore', key: 'f' }; }
   resetRun();
 };
+// ---- dev sandbox bar (?dev): jump or pass exercises, reset the sandbox, leave it ------------------------------------
+function devBar(): void {
+  $('devBar').hidden = false;
+  const lesson = mode.kind === 'trail' && !completionHome, busy = run.status === 'playing';
+  const n = lessonExercises(runTrail).length;
+  $('devWhere').textContent = mode.kind === 'remedial' ? `Finger stop · page ${stopPage()}/${FINGER_PAGES}` : lesson ? `${runTrail.name} · ${runExerciseIndex + 1}/${n}` : mode.kind;
+  $<HTMLButtonElement>('devPrev').disabled = !lesson || busy || runExerciseIndex === 0;
+  $<HTMLButtonElement>('devNext').disabled = !lesson || busy || runExerciseIndex >= n - 1;
+  $<HTMLButtonElement>('devPass').disabled = !lesson || busy;
+}
+/** Move to another exercise of the lesson on screen, from its start (a passed lesson is reopened). */
+function devJump(by: number): void {
+  if (!devSandbox || mode.kind !== 'trail') return;
+  const t = runTrail, i = Math.max(0, Math.min(lessonExercises(t).length - 1, runExerciseIndex + by));
+  const p = state.trails[t.id]; if (p) p.cleared = false;
+  state.lessonSteps[t.id] = i; state.trail = t.id; replayReturn = null; gate = null;
+  save(); resetRun();
+}
+/** Count the exercise on screen as passed at 100% and go on, as finishing it would (no result screen). */
+function devPass(): void {
+  if (!devSandbox || mode.kind !== 'trail' || run.status === 'playing') return;
+  endBrief(true);
+  const n = Math.max(1, run.text.length);
+  applyRun(state, keys, { hits: n, attempts: n, maxCombo: n, wpm: 40, acc: 100, rhythm: 1, now: Date.now() });
+  replayReturn = null; gate = null;
+  save(); resetRun();
+}
+if (devSandbox) {
+  $('devPrev').onclick = () => devJump(-1);
+  $('devNext').onclick = () => devJump(1);
+  $('devPass').onclick = devPass;
+  $('devReset').onclick = () => { try { sessionStorage.removeItem(SANDBOX_KEY); } catch { /* reload starts fresh anyway */ } location.reload(); };
+  const exit = new URL(location.href); exit.searchParams.delete('dev');
+  $<HTMLAnchorElement>('devExit').href = exit.pathname + exit.search + exit.hash;
+}
 $('skipGuided').onclick = () => {
   if (mode.kind !== 'trail' || !guided()) return;
   applyRun(state, keys, { hits: 0, attempts: 0, maxCombo: 0, wpm: 0, acc: 0, rhythm: 0, now: Date.now() });
@@ -1040,6 +1093,8 @@ const showGuestHint = (): void => { guestHint.hidden = signedIn; };
 const account = createAccount({
   announce: toast,
   onSession: (session, client) => {
+    // The sandbox never adopts, clears or syncs account progress.
+    if (devSandbox) return;
     signedIn = session !== null;
     if (!signedIn) clearStored();
     showGuestHint();
@@ -1112,7 +1167,7 @@ const consoleApi = Object.freeze({
       report: devReport,
       clear: clearDevReport,
       runs: () => structuredClone(devRuns),
-      /** Read-only view of the screen for scripted play-throughs (?dev=1 only). */
+      /** Read-only view of the screen for scripted play-throughs (?dev only). */
       current: () => (devTraceEnabled ? { status: run.status, text: run.text, briefing: !!brief } : null),
     }),
 });

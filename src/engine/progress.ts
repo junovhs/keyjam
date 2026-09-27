@@ -9,10 +9,15 @@ import { bumpStreak, starsFor, swiftBonus, xpFor, type Stars } from './scoring';
 export const STAGE_NAMES: readonly StageName[] = ['drill', 'mix', 'words'];
 export const progressOf = (s: SaveV6, id: string): TrailProgress => s.trails[id] ?? (s.trails[id] = freshProgress());
 export const isCleared = (s: SaveV6, id: string): boolean => !!s.trails[id]?.cleared;
+/** Dev sandbox (?dev): every chapter, lesson and finger stop is open and nothing blocks; nothing is marked done. */
+let everythingOpen = false;
+export const openEverything = (on = true): void => { everythingOpen = on; };
+export const everythingIsOpen = (): boolean => everythingOpen;
 
 /** Chapter clears are permanent; optional chapters also need the setting. */
 export function groveOpen(s: SaveV6, groveId: string): boolean {
   const g = GROVES.find((x) => x.id === groveId)!;
+  if (everythingOpen) return true;
   if (g.optional) { if (!s.settings.codeGrove) return false; const cp = s.trails[g.opensAfter!]; return !!cp && cp.cleared; }
   if (g.n === 1) return true;
   const prev = GROVES.find((x) => !x.optional && x.n === g.n - 1)!;
@@ -21,6 +26,7 @@ export function groveOpen(s: SaveV6, groveId: string): boolean {
 }
 
 export function trailUnlocked(s: SaveV6, trail: Trail): boolean {
+  if (everythingOpen) return true;
   if (!groveOpen(s, trail.grove)) return false;
   const inGrove = trailsInGrove(trail.grove);
   const i = inGrove.findIndex((t) => t.id === trail.id);
@@ -32,7 +38,7 @@ export const stopDone = (s: SaveV6, stop: Stop): boolean => pairCompleted(s.fing
 const started = (s: SaveV6, trailId: string): boolean => isCleared(s, trailId) || s.lessonSteps[trailId] !== undefined;
 /** The unfinished stop that holds `trail` back: one placed after the lesson before it on the main path. */
 export function blockingStop(s: SaveV6, trail: Trail): Stop | null {
-  if (started(s, trail.id)) return null;
+  if (everythingOpen || started(s, trail.id)) return null;
   const i = MAIN_TRAILS.findIndex((t) => t.id === trail.id);
   if (i < 1) return null;
   return STOPS.find((st) => st.after === MAIN_TRAILS[i - 1]!.id && !stopDone(s, st)) ?? null;
