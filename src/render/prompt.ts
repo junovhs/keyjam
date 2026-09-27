@@ -159,7 +159,7 @@ export class CanvasPrompt {
     const textChanged = s.text !== this.state.text;
     this.state = { ...s };
     if (readingChanged) {
-      this.flow = new TextFlow(this.font(), this.lineHeight(), this.letterSpacing(), s.reading ? 'left' : 'center', s.reading ? 1 : 3);
+      this.flow = new TextFlow(this.font(), this.lineHeight(), this.letterSpacing(), s.reading ? 'left' : 'center', 3);
       this.measureHost();
     }
     if (textChanged || readingChanged) { this.flow.setText(s.text); this.lastFlow = null; this.mirror.textContent = s.text; this.effects.reset(); this.gplaced = false; }
@@ -211,7 +211,7 @@ export class CanvasPrompt {
     const { pos, wrong } = this.state;
     const now = performance.now();
     const dt = Math.min(0.05, (now - this.lastDraw) / 1000); this.lastDraw = now;
-    const fx = this.effects, colors = this.colors, reading = !!this.state.reading;
+    const fx = this.effects, colors = this.colors;
     const pad = this.boxPad();
     // Ease every glyph toward its Pretext position (in scrolled space). Snap on a new passage or with motion off.
     const n = this.state.text.length;
@@ -230,9 +230,9 @@ export class CanvasPrompt {
     const cur = cur0 ? { ...cur0, y: cur0.y - firstLine * lh } : undefined;
     if (cur) {
       const isSpace = cur.ch === ' ';
-      const h = isSpace && !reading ? Math.round(this.fontPx * 1.25) : Math.round(this.fontPx * 1.4);
-      const w = isSpace && !reading ? cur.w : cur.w + pad * 2;
-      const x = isSpace && !reading ? cur.x : cur.x - pad;
+      const h = isSpace ? Math.round(this.fontPx * 1.25) : Math.round(this.fontPx * 1.4);
+      const w = isSpace ? cur.w : cur.w + pad * 2;
+      const x = isSpace ? cur.x : cur.x - pad;
       fx.target({ ...cur, x }, w, h, now);
     }
     const c = fx.cursor;
@@ -260,10 +260,7 @@ export class CanvasPrompt {
       const x = this.padding + this.gx[g.index]! + (current ? shake.x : 0), cy = top + ay + lh / 2 + (current ? shake.y : 0);
       // Ink for the current glyph follows the box: white (or orange on a miss) once it has arrived, plain ink while it is still travelling.
       const currentInk = bad ? colors.missInk : arrived ? '#fff' : colors.ink;
-      if (g.ch === ' ' && reading) {
-        ctx.fillStyle = current ? currentInk : '#b8b1a5';
-        ctx.fillText('·', x, cy + 1); continue;
-      }
+      // Every space is a SPACE pill, reading passages included: a dot there reads as the '.' key.
       if (g.ch === ' ') {
         const h = Math.round(this.fontPx * 1.25), w = g.w;
         if (!current) {

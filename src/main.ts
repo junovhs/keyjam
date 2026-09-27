@@ -661,7 +661,7 @@ function finish(): void {
   let acc = m.acc;
   if (mode.kind === 'remedial') {
     const all = [...stopRuns, run], hits = all.reduce((a, r) => a + r.hits, 0), errors = all.reduce((a, r) => a + r.errors, 0);
-    acc = accOf(hits, all.reduce((a, r) => a + r.attempts, 0));
+    acc = accOf(all.reduce((a, r) => a + r.scoredHits, 0), all.reduce((a, r) => a + r.scoredAttempts, 0));
     $('resultMastery').textContent = `${all.length} pages · ${hits} characters typed · ${errors === 0 ? 'no missed keys' : `${errors} missed ${errors === 1 ? 'key' : 'keys'}`}`;
   }
   // Spec F5: a beat run is judged for evenness only — one word and three bars, never a number.

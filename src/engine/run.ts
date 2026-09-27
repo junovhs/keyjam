@@ -8,7 +8,10 @@ export interface Keystroke { key: string; typed: string; index: number; correct:
 /** One attempt at a text. Pure: no DOM, no clock of its own (pass `now`). */
 export class Run {
   pos = 0; status: RunStatus = 'idle';
-  hits = 0; attempts = 0; errors = 0; combo = 0; maxCombo = 0; wrong = false;
+  hits = 0; attempts = 0; errors = 0;
+  /** Accuracy's own counts: keystrokes where the text wanted a letter, never a space (FIX-05). */
+  scoredHits = 0; scoredAttempts = 0;
+  combo = 0; maxCombo = 0; wrong = false;
   start = 0; end = 0; private lastKeyAt = 0;
   readonly strokes: Keystroke[] = [];
   constructor(public readonly text: string) {}
@@ -16,16 +19,17 @@ export class Run {
   get current(): string { return this.text[this.pos] ?? ''; }
   begin(now: number): void {
     if (this.status === 'playing') return;
-    this.status = 'playing'; this.pos = this.hits = this.attempts = this.errors = this.combo = this.maxCombo = 0;
+    this.status = 'playing'; this.pos = this.hits = this.attempts = this.scoredHits = this.scoredAttempts = this.errors = this.combo = this.maxCombo = 0;
     this.wrong = false; this.start = now; this.lastKeyAt = now; this.strokes.length = 0;
   }
-  /** Every printable attempt counts, including a letter where a space was needed. */
+  /** Every printable attempt counts, including a letter where a space was needed; accuracy skips the wanted spaces. */
   type(k: string, now: number): KeyOutcome {
     if (this.status !== 'playing' || k.length !== 1) return 'ignored';
     const want = this.current;
     const latencyMs = now - this.lastKeyAt; this.lastKeyAt = now;
     this.attempts++;
     const ok = k === want;
+    if (want !== ' ') { this.scoredAttempts++; if (ok) this.scoredHits++; }
     this.strokes.push({ key: want, typed: k, index: this.pos, correct: ok, latencyMs });
     if (ok) {
       this.hits++; this.pos++; this.combo++; this.maxCombo = Math.max(this.maxCombo, this.combo); this.wrong = false;
@@ -55,6 +59,6 @@ export class Run {
     return 0.5 * cvScore + 0.5 * spikeScore;
   }
   metrics(now: number): { wpm: number; acc: number; pct: number } {
-    return { wpm: wpmOf(this.hits, this.elapsed(now)), acc: accOf(this.hits, this.attempts), pct: Math.round((this.pos / this.text.length) * 100) };
+    return { wpm: wpmOf(this.hits, this.elapsed(now)), acc: accOf(this.scoredHits, this.scoredAttempts), pct: Math.round((this.pos / this.text.length) * 100) };
   }
 }

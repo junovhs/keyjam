@@ -29,13 +29,22 @@ it('word boundaries do not turn fluent phrasing into uneven typing', () => {
   expect(r.metrics(t).acc).toBe(100);
 });
 
-it('missing a space is an observed error and must be corrected before advancing', () => {
+it('missing a space is observed and must be corrected, but never lowers accuracy', () => {
   const r = new Run('f j'); r.begin(1000);
   r.type('f', 1300);
   expect(r.type('j', 1600)).toBe('miss');
   expect(r.pos).toBe(1);
   r.type(' ', 1900); r.type('j', 2200);
   expect(r.status).toBe('complete');
-  expect(r.metrics(2200).acc).toBe(75);
+  expect(r.errors).toBe(1);
+  expect(r.metrics(2200).acc).toBe(100);
   expect(r.strokes[1]).toMatchObject({ key: ' ', typed: 'j', correct: false });
+});
+
+it('a space pressed where a letter was wanted still counts against accuracy', () => {
+  const r = new Run('f j'); r.begin(1000);
+  r.type('f', 1300); r.type(' ', 1600);
+  expect(r.type(' ', 1900)).toBe('miss');
+  r.type('j', 2200);
+  expect(r.metrics(2200).acc).toBe(67);
 });
