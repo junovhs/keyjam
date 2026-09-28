@@ -22,13 +22,18 @@ export class Run {
     this.status = 'playing'; this.pos = this.hits = this.attempts = this.scoredHits = this.scoredAttempts = this.errors = this.combo = this.maxCombo = 0;
     this.wrong = false; this.start = now; this.lastKeyAt = now; this.strokes.length = 0;
   }
-  /** Every printable attempt counts, including a letter where a space was needed; accuracy skips the wanted spaces. */
-  type(k: string, now: number): KeyOutcome {
+  /** Ms since the last press (or the run's start). */
+  gap(now: number): number { return now - this.lastKeyAt; }
+  /**
+   * Every printable attempt counts, including a letter where a space was needed; accuracy skips the wanted spaces.
+   * `rushed`: the press came too fast (PACE-01) and counts as a miss whatever key it was.
+   */
+  type(k: string, now: number, rushed = false): KeyOutcome {
     if (this.status !== 'playing' || k.length !== 1) return 'ignored';
     const want = this.current;
     const latencyMs = now - this.lastKeyAt; this.lastKeyAt = now;
     this.attempts++;
-    const ok = k === want;
+    const ok = !rushed && k === want;
     if (want !== ' ') { this.scoredAttempts++; if (ok) this.scoredHits++; }
     this.strokes.push({ key: want, typed: k, index: this.pos, correct: ok, latencyMs });
     if (ok) {

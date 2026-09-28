@@ -52,6 +52,14 @@ export function medianInterval(strokes: readonly Keystroke[]): number | null {
 export const PACE_LIMIT_BPM = 100;
 /** Presses the live check looks back over: few enough to be instant, enough that one quick pair never trips it. */
 export const LIVE_WINDOW = 4;
+/**
+ * Would a press arriving `gapMs` after the last one tip the recent pace over the limit? (Needs an earlier press in the run.)
+ * A press that is itself at or under the beat never is: slowing down is felt on the very next key.
+ */
+export function tooFastNext(strokes: readonly Keystroke[], from: number, gapMs: number): boolean {
+  if (!strokes.length || gapMs >= 60_000 / PACE_LIMIT_BPM) return false;
+  return tooFastNow([...strokes, { key: '', typed: '', index: -1, correct: true, latencyMs: gapMs }], from);
+}
 /** True the moment the last few presses (from `from` on; any key, right or wrong) typically came faster than PACE_LIMIT_BPM. */
 export function tooFastNow(strokes: readonly Keystroke[], from = 0): boolean {
   const lats = strokes.slice(Math.max(1, from)).map((s) => s.latencyMs).filter((ms) => ms < 2000).slice(-LIVE_WINDOW);
@@ -76,4 +84,6 @@ export const PACE_BPM = 78;
 /** The pace modal's heading. */
 export const PACE_TITLE = 'Slow down. This isn’t a race.';
 /** The pace modal's message: about technique, with no number and no claim about the finger used. */
+/** What changes once the modal has shown: said in the modal and beside the small key. */
+export const PACE_RULE = 'From now on, a press faster than this beat counts as a miss.';
 export const PACE_NOTE = "Going fast isn't the point. Here it actually works against what this app is for. We're slowly programming good muscle memory into your fingers, and that only happens slowly: one calm, correct press at a time, with each key on the finger shown.";

@@ -15,7 +15,8 @@ const PREV = ['keygrove.v4', 'keygrove.v3', 'keygrove.v2'];
 export interface TrailProgress { runs: number; cleared: boolean; stars: 0 | 1 | 2 | 3; bestWpm: number; bestAcc: number; fails: number; recent: number[]; cleanStreak: number }
 export interface Stats { runs: number; chars: number; attempts: number; bestWpm: number; bestAcc: number; xp: number; days: number; lastDay: string; bestCombo: number }
 /** `onboarded`: the method question has been answered (or the save predates it). */
-export interface Settings { guideStrong: boolean; reviewOn: boolean; codeGrove: boolean; method: string; onboarded: boolean }
+/** `paceSeen`: the too-fast modal has shown once; from then on a rushed press counts as a miss instead. */
+export interface Settings { guideStrong: boolean; reviewOn: boolean; codeGrove: boolean; method: string; onboarded: boolean; paceSeen: boolean }
 export interface SaveV6 {
   v: 6;
   fingerCourses: Record<string, number>;
@@ -43,7 +44,7 @@ export const freshProgress = (): TrailProgress => ({ runs: 0, cleared: false, st
 export const fresh = (): SaveV6 => ({
   v: 6, fingerCourses: {}, lessonSteps: {}, stopPages: {}, trail: MAIN_TRAILS[0]!.id, trails: {}, keys: {}, confusions: {},
   stats: { runs: 0, chars: 0, attempts: 0, bestWpm: 0, bestAcc: 0, xp: 0, days: 0, lastDay: '', bestCombo: 0 },
-  settings: { guideStrong: false, reviewOn: true, codeGrove: false, method: DEFAULT_METHOD_ID, onboarded: false },
+  settings: { guideStrong: false, reviewOn: true, codeGrove: false, method: DEFAULT_METHOD_ID, onboarded: false, paceSeen: false },
   errors: emptyTally(),
   transitions: {},
   pace: freshPace(),
@@ -119,7 +120,7 @@ export function sanitize(x: unknown): SaveV6 {
   for (const k of ['runs', 'chars', 'attempts', 'bestWpm', 'bestAcc', 'xp', 'days', 'bestCombo'] as const) s.stats[k] = num(q[k]);
   s.stats.lastDay = typeof q.lastDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(q.lastDay) ? q.lastDay : '';
   const st = (o.settings && typeof o.settings === 'object' ? o.settings : {}) as Record<string, unknown>;
-  for (const k of ['guideStrong', 'reviewOn', 'codeGrove'] as const) if (typeof st[k] === 'boolean') s.settings[k] = st[k];
+  for (const k of ['guideStrong', 'reviewOn', 'codeGrove', 'paceSeen'] as const) if (typeof st[k] === 'boolean') s.settings[k] = st[k];
   // A save written before the question existed has already chosen by playing: never ask it.
   s.settings.onboarded = typeof st.onboarded === 'boolean' ? st.onboarded : true;
   if (typeof st.method === 'string' && METHODS.some((m) => m.id === st.method)) s.settings.method = st.method;

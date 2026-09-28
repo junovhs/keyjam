@@ -121,7 +121,7 @@ describe('retired typing methods (DEC-17)', () => {
     keys: { f: stat, z: stat, x: stat, c: stat, b: stat },
     transitions: { fj: { err: 0, lat: 200, lat2: 40000, seen: 10, hits: 10, last: 1 }, cd: { err: 0, lat: 200, lat2: 40000, seen: 10, hits: 10, last: 1 }, ab: { err: 0, lat: 200, lat2: 40000, seen: 10, hits: 10, last: 1 } },
     fingerCourses: { [`${retired}/li`]: 6, [`${DEFAULT_METHOD_ID}/li`]: 2, [`${retired}/rp`]: 3 },
-    settings: { guideStrong: false, reviewOn: true, codeGrove: false, method: retired, onboarded: true },
+    settings: { guideStrong: false, reviewOn: true, codeGrove: false, method: retired, onboarded: true, paceSeen: false },
   };
   it('moves to the default method, resetting only the keys whose finger differed', () => {
     const s = sanitize(old);

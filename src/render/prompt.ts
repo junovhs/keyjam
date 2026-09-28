@@ -108,6 +108,14 @@ export class CanvasPrompt {
     if (g && kind === 'miss') this.effects.miss(g, now);
     this.ensureLoop();
   }
+  /** Viewport box of glyph `index` as drawn right now, for DOM overlays such as the "Too fast!" tag. */
+  glyphBox(index: number): { x: number; y: number; w: number; h: number } | null {
+    const g = this.lastFlow?.glyphs.find((x) => x.index === index);
+    if (!g) return null;
+    const r = this.canvas.getBoundingClientRect(), lh = this.flow.lineHeight;
+    const gx = this.gplaced ? this.gx[index]! : g.x, gy = this.gplaced ? this.gy[index]! : g.y - this.scroll * lh;
+    return { x: r.left + this.bleed + this.padding + gx, y: r.top + this.bleed + this.top + gy, w: g.w, h: lh };
+  }
   /** The passage is done: lift the visible lines and throw a little light. */
   onComplete(): void {
     const flow = this.lastFlow;

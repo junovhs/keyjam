@@ -4,7 +4,7 @@ import { lessonExercises } from '../curriculum/lesson-flow';
 import { fresh, sanitize } from '../state/save';
 import { mergeProgress } from '../state/progress-sync';
 import { KeyModel } from './keymodel';
-import { LIVE_WINDOW, PACE_NOTE, freshPace, tooFastNow, medianInterval, notePace, paceFactor, paceNoteApplies, relaxedIntervalMs, typedFast } from './pace';
+import { LIVE_WINDOW, PACE_NOTE, PACE_RULE, freshPace, tooFastNext, tooFastNow, medianInterval, notePace, paceFactor, paceNoteApplies, relaxedIntervalMs, typedFast } from './pace';
 import { applyRun } from './progress';
 import { Run } from './run';
 
@@ -67,6 +67,24 @@ describe('live speed limit (PACE-01)', () => {
     expect(tooFastNow(run.strokes, run.strokes.length)).toBe(false);
     expect(tooFastNow(run.strokes, run.strokes.length - LIVE_WINDOW)).toBe(true);
   });
+});
+
+describe('rushed presses (PACE-01, after the first modal)', () => {
+  it('judges the press about to land together with the ones before it', () => {
+    const steady = typed('dededede', 700).strokes;
+    expect(tooFastNext(steady, 0, 700)).toBe(false);
+    expect(tooFastNext(steady, 0, 100)).toBe(false); // one quick press among steady ones is fine
+    expect(tooFastNext(typed('dededede', 300).strokes, 0, 300)).toBe(true);
+    expect(tooFastNext([], 0, 50)).toBe(false);
+    expect(tooFastNext(typed('dededede', 150).strokes, 0, 700)).toBe(false); // slowing down counts at once
+  });
+  it('a rushed press is a miss even on the right key, and does not advance', () => {
+    const run = new Run('dd'); run.begin(0);
+    expect(run.type('d', 100, true)).toBe('miss');
+    expect(run.pos).toBe(0); expect(run.errors).toBe(1);
+    expect(run.type('d', 900)).toBe('ok');
+  });
+  it('the rule says nothing numeric', () => expect(PACE_RULE).not.toMatch(/\d|wpm|bpm/i));
 });
 
 describe('established pace (PACE-02)', () => {
