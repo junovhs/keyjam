@@ -2,7 +2,7 @@ import { lessonExercises, type LessonExercise, type SlotPick } from './curriculu
 import { nextPractice } from './engine/next-practice';
 import { beatInterval, evenness, onBeat } from './engine/beat';
 import { demoSchedule, demoStepMs, type DemoStep } from './engine/demo';
-import { PACE_BPM, PACE_NOTE, PACE_TITLE, notePace, paceNoteApplies, tooFastNow } from './engine/pace';
+import { PACE_BPM, PACE_NOTE, PACE_TITLE, notePace, tooFastNow } from './engine/pace';
 import { briefingFor, SHIFT_TOKEN, type BriefIcon, type Briefing } from './curriculum/briefings';
 import { fingerPractice, completeFingerPage, FINGER_PAGES, type FingerPractice, type SideScore } from './engine/finger-practice';
 import type { Stop } from './curriculum/stops';
@@ -702,11 +702,12 @@ function typeKey(k: string): void {
   else if (last.correct) sound.play('key');
   if (pulse && last.correct) $('beatDot').style.setProperty('--fill', onBeat(performance.now(), pulse.t0, pulse.interval).toFixed(2));
   // PACE-01: over the live speed limit, the pace modal opens right now, mid-passage.
-  if (r !== 'done' && paceWatched() && tooFastNow(run.strokes, paceRun === run ? paceFrom : 0)) openPace(last.key);
+  const fast = paceWatched() && tooFastNow(run.strokes, paceRun === run ? paceFrom : 0);
   if (r === 'done') {
     canvasPrompt?.onComplete();
-    stopPulse(); return finish();
+    stopPulse(); finish(); if (fast) openPace(last.key); return;
   }
+  if (fast) openPace(last.key);
   prompt(); metrics(); keymap(); nextVisual();
 }
 /** The right capital typed with the same-hand Shift: say which Shift it wanted (at most every few seconds). */
@@ -753,8 +754,8 @@ function stopDemo(): void {
 }
 function practiseSlowly(): void { closePace(); if (run.status === 'idle' || !run.text) return; mode = { kind: 'slow', text: run.text }; resetRun(); }
 const paceModal = () => $('paceModal');
-/** The live pace check covers lesson technique exercises (drills, loops, words) in chapters 1–4; never a beat run. */
-const paceWatched = (): boolean => mode.kind === 'trail' && !runExercise.beat && paceNoteApplies(runTrail, runExercise) && !paceModal().classList.contains('open');
+/** The live pace check is universal: every run, every mode, every chapter. */
+const paceWatched = (): boolean => !paceModal().classList.contains('open');
 /** After the modal closes, only presses from then on count toward the next check. */
 let paceRun: Run | null = null, paceFrom = 0;
 /** PACE-01: going too fast opens a modal mid-passage — a key lit on a slow beat, and why speed works against the point. */

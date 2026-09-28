@@ -52,9 +52,9 @@ export function medianInterval(strokes: readonly Keystroke[]): number | null {
 export const PACE_LIMIT_BPM = 100;
 /** Presses the live check looks back over: few enough to be instant, enough that one quick pair never trips it. */
 export const LIVE_WINDOW = 4;
-/** True the moment the last few in-word presses (from `from` on) typically came faster than PACE_LIMIT_BPM. */
+/** True the moment the last few presses (from `from` on; any key, right or wrong) typically came faster than PACE_LIMIT_BPM. */
 export function tooFastNow(strokes: readonly Keystroke[], from = 0): boolean {
-  const lats = wordIntervals(strokes.slice(Math.max(0, from - 1))).slice(-LIVE_WINDOW);
+  const lats = strokes.slice(Math.max(1, from)).map((s) => s.latencyMs).filter((ms) => ms < 2000).slice(-LIVE_WINDOW);
   return lats.length >= LIVE_WINDOW && median(lats) < 60_000 / PACE_LIMIT_BPM;
 }
 
