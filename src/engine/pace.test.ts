@@ -4,7 +4,7 @@ import { lessonExercises } from '../curriculum/lesson-flow';
 import { fresh, sanitize } from '../state/save';
 import { mergeProgress } from '../state/progress-sync';
 import { KeyModel } from './keymodel';
-import { LIVE_WINDOW, PACE_NOTE, blockedNext, freshPace, paceLevel, perfectWord, tooFastNow, medianInterval, notePace, paceFactor, paceNoteApplies, relaxedIntervalMs, typedFast } from './pace';
+import { LIVE_WINDOW, PACE_NOTE, blockedNext, freshPace, paceLevel, perfectRecent, perfectWord, tooFastNow, medianInterval, notePace, paceFactor, paceNoteApplies, relaxedIntervalMs, typedFast } from './pace';
 import { applyRun } from './progress';
 import { Run } from './run';
 
@@ -56,10 +56,10 @@ describe('pace note (PACE-01)', () => {
 });
 
 describe('live pace warnings (PACE-01)', () => {
-  it('red over 50 WPM, yellow over 36, nothing at or under 36', () => {
+  it('red over 50 WPM, yellow over 40, nothing at or under 40', () => {
     expect(paceLevel(typed('dededede', 200).strokes)).toBe('fast');   // 60 WPM
-    expect(paceLevel(typed('dededede', 300).strokes)).toBe('warn');   // 40 WPM
-    expect(paceLevel(typed('dededede', 400).strokes)).toBeNull();     // 30 WPM
+    expect(paceLevel(typed('dededede', 270).strokes)).toBe('warn');   // ~44 WPM
+    expect(paceLevel(typed('dededede', 300).strokes)).toBeNull();     // 40 WPM
     expect(paceLevel(typed('ded', 100).strokes)).toBeNull();          // too few presses to judge
   });
   it('clears on the first slow press', () => {
@@ -82,6 +82,14 @@ describe('live pace warnings (PACE-01)', () => {
     expect(perfectWord(at(500))).toBe(true);
     expect(perfectWord(at(300))).toBe(false);
     expect(perfectWord(typed('ded', 500).strokes)).toBe(false); // no Space: not a finished word
+  });
+  it('the first perfect comes from the latest four presses, on average', () => {
+    expect(perfectRecent(typed('dededede', 500).strokes)).toBe(true);
+    expect(perfectRecent(typed('dededede', 400).strokes)).toBe(false);
+    expect(perfectRecent(typed('ded', 500).strokes)).toBe(false); // not four gaps yet
+    const run = new Run('dededede'); let now = 0; run.begin(now);
+    for (const [c, ms] of [['d', 0], ['e', 700], ['d', 700], ['e', 300], ['d', 300]] as const) { now += ms; run.type(c, now); }
+    expect(perfectRecent(run.strokes)).toBe(true); // (700+700+300+300)/4 = 500 ms: an average, not a median
   });
   it('counts only presses after `from`, so a closed modal needs a fresh window', () => {
     const run = typed('dededededede', 200);

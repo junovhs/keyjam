@@ -51,7 +51,7 @@ export function medianInterval(strokes: readonly Keystroke[]): number | null {
 /** Pace bands, in words a minute (a word is five presses, as everywhere in the app). */
 export const PACE_PERFECT_WPM = 25;
 /** Over this, a yellow "Slow down" tag: a warning only. */
-export const PACE_WARN_WPM = 36;
+export const PACE_WARN_WPM = 40;
 /** Over this, "Too fast!": the press is blocked (a miss) once the one-time modal has shown. */
 export const PACE_BLOCK_WPM = 50;
 /** The tempo we want, in presses a minute: the pace modal's key flashes at it. */
@@ -81,8 +81,19 @@ export function blockedNext(strokes: readonly Keystroke[], from: number, gapMs: 
   if (!strokes.length) return false;
   return paceLevel([...strokes, { key: '', typed: '', index: -1, correct: true, latencyMs: gapMs }], from) === 'fast';
 }
+/** Average ms of these gaps, pauses (≥ 2 s) left out; null when none are left. */
+function meanGap(lats: readonly number[]): number | null {
+  const kept = lats.filter((ms) => ms < 2000);
+  return kept.length ? kept.reduce((a, b) => a + b, 0) / kept.length : null;
+}
+const perfectGap = (ms: number | null): boolean => ms !== null && ms >= msAt(PACE_PERFECT_WPM);
+/** Do the latest LIVE_WINDOW presses (from `from` on) average PACE_PERFECT_WPM or slower? The run's first "Perfect speed". */
+export function perfectRecent(strokes: readonly Keystroke[], from = 0): boolean {
+  const lats = strokes.slice(Math.max(1, from)).map((s) => s.latencyMs).filter((ms) => ms < 2000).slice(-LIVE_WINDOW);
+  return lats.length >= LIVE_WINDOW && perfectGap(meanGap(lats));
+}
 /**
- * Was the word just finished (the last stroke is its correct Space) typed at PACE_PERFECT_WPM or slower?
+ * Was the word just finished (the last stroke is its correct Space) typed at an average of PACE_PERFECT_WPM or slower?
  * Its presses after the first letter count, the Space included; the pause before the word does not.
  */
 export function perfectWord(strokes: readonly Keystroke[]): boolean {
@@ -90,11 +101,8 @@ export function perfectWord(strokes: readonly Keystroke[]): boolean {
   if (!space?.correct || space.key !== ' ') return false;
   let start = end - 1;
   while (start >= 0 && !(strokes[start]!.correct && strokes[start]!.key === ' ')) start--;
-  const lats = strokes.slice(start + 2, end + 1).map((s) => s.latencyMs);
-  return lats.length >= 2 && median(lats) >= msAt(PACE_PERFECT_WPM);
+  return perfectGap(meanGap(strokes.slice(Math.max(1, start + 2), end + 1).map((s) => s.latencyMs)));
 }
-/** Perfect words in a row that earn one "Perfect speed". */
-export const PERFECT_EVERY = 3;
 
 /** Ms per press at the chapter's relaxed pace (its wpmTarget; a word is five characters). */
 export const relaxedIntervalMs = (trail: Trail): number => 12_000 / (trail.wpmTarget ?? groveOf(trail).wpmTarget);

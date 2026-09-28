@@ -2,7 +2,7 @@ import { lessonExercises, type LessonExercise, type SlotPick } from './curriculu
 import { nextPractice } from './engine/next-practice';
 import { beatInterval, evenness, onBeat } from './engine/beat';
 import { demoSchedule, demoStepMs, type DemoStep } from './engine/demo';
-import { PACE_BPM, PACE_NOTE, PACE_TITLE, PERFECT_EVERY, blockedNext, notePace, paceLevel, perfectWord } from './engine/pace';
+import { PACE_BPM, PACE_NOTE, PACE_TITLE, blockedNext, notePace, paceLevel, perfectRecent, perfectWord } from './engine/pace';
 import { briefingFor, SHIFT_TOKEN, type BriefIcon, type Briefing } from './curriculum/briefings';
 import { fingerPractice, completeFingerPage, FINGER_PAGES, type FingerPractice, type SideScore } from './engine/finger-practice';
 import type { Stop } from './curriculum/stops';
@@ -705,17 +705,18 @@ function typeKey(k: string): void {
   else if (last.correct) sound.play('key');
   if (pulse && last.correct) $('beatDot').style.setProperty('--fill', onBeat(performance.now(), pulse.t0, pulse.interval).toFixed(2));
   // PACE-01: over the live speed limit, the pace modal opens right now, mid-passage.
-  // PACE-01: over 36 WPM a yellow "Slow down"; over 50 the first time opens the modal, after that the press is blocked.
-  // Three words in a row at 25 WPM or slower earn a green "Perfect speed".
+  // PACE-01: over 40 WPM a yellow "Slow down"; over 50 the first time opens the modal, after that the press is blocked.
+  // A green "Perfect speed" as soon as the latest four presses average 25 WPM or slower, then after every word that does.
   const level = paceWatched() ? paceLevel(run.strokes, paceStart) : null;
   const fast = level === 'fast' && !state.settings.paceSeen;
   if (blocked) flagPace('fast');
   else if (level && !fast) flagPace(level);
   else if (!level && $('tooFast').dataset.level !== 'perfect') $('tooFast').classList.remove('show');
-  if (paceRun !== run) { paceRun = run; paceFrom = 0; perfectRun = 0; }
-  if (last.correct && last.key === ' ') {
-    perfectRun = perfectWord(run.strokes) ? perfectRun + 1 : 0;
-    if (perfectRun >= PERFECT_EVERY) { perfectRun = 0; const end = run.pos - 1, start = run.text.lastIndexOf(' ', end - 1) + 1; flagPace('perfect', Math.floor((start + end - 1) / 2)); }
+  if (paceRun !== run) { paceRun = run; paceFrom = 0; perfectStarted = false; }
+  if (!perfectStarted) { if (perfectRecent(run.strokes)) { perfectStarted = true; flagPace('perfect'); } }
+  else if (last.correct && last.key === ' ' && perfectWord(run.strokes)) {
+    const end = run.pos - 1, start = run.text.lastIndexOf(' ', end - 1) + 1;
+    flagPace('perfect', Math.floor((start + end - 1) / 2));
   }
   if (r === 'done') {
     canvasPrompt?.onComplete();
@@ -788,8 +789,8 @@ function flagPace(level: keyof typeof PACE_TAGS, at = run.pos): void {
 const paceWatched = (): boolean => !paceModal().classList.contains('open');
 /** After the modal closes, only presses from then on count toward the next check. */
 let paceRun: Run | null = null, paceFrom = 0;
-/** Words in a row finished at a perfect pace (PACE_PERFECT_WPM or slower). */
-let perfectRun = 0;
+/** This run has shown its first "Perfect speed" (from the latest four presses); after that, each perfect word earns one. */
+let perfectStarted = false;
 /** PACE-01: going too fast opens a modal mid-passage — a key lit on a slow beat, and why speed works against the point. */
 function openPace(key: string): void {
   $('paceKey').textContent = key === ' ' ? '␣' : key.toUpperCase();
