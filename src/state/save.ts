@@ -15,7 +15,7 @@ const PREV = ['keygrove.v4', 'keygrove.v3', 'keygrove.v2'];
 export interface TrailProgress { runs: number; cleared: boolean; stars: 0 | 1 | 2 | 3; bestWpm: number; bestAcc: number; fails: number; recent: number[]; cleanStreak: number }
 export interface Stats { runs: number; chars: number; attempts: number; bestWpm: number; bestAcc: number; xp: number; days: number; lastDay: string; bestCombo: number }
 /** `onboarded`: the method question has been answered (or the save predates it). */
-/** `paceSeen`: the too-fast modal has shown once; from then on a rushed press counts as a miss instead. */
+/** `paceSeen`: the too-fast modal has shown once; from then on going too fast only shows a tag over the letter. */
 export interface Settings { guideStrong: boolean; reviewOn: boolean; codeGrove: boolean; method: string; onboarded: boolean; paceSeen: boolean }
 export interface SaveV6 {
   v: 6;

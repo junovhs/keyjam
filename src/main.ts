@@ -2,7 +2,7 @@ import { lessonExercises, type LessonExercise, type SlotPick } from './curriculu
 import { nextPractice } from './engine/next-practice';
 import { beatInterval, evenness, onBeat } from './engine/beat';
 import { demoSchedule, demoStepMs, type DemoStep } from './engine/demo';
-import { PACE_BPM, PACE_NOTE, PACE_RULE, PACE_TITLE, notePace, tooFastNext, tooFastNow } from './engine/pace';
+import { PACE_BPM, PACE_NOTE, PACE_TITLE, notePace, paceLevel } from './engine/pace';
 import { briefingFor, SHIFT_TOKEN, type BriefIcon, type Briefing } from './curriculum/briefings';
 import { fingerPractice, completeFingerPage, FINGER_PAGES, type FingerPractice, type SideScore } from './engine/finger-practice';
 import type { Stop } from './curriculum/stops';
@@ -691,10 +691,7 @@ function continueAfterResult(firstKey?: string): void {
   if (firstKey !== undefined && !brief && firstKey === run.current) { begin(); typeKey(firstKey); }
 }
 function typeKey(k: string): void {
-  // PACE-01: after the modal has shown once, a press that tips the pace over the limit is a miss, tagged "Too fast!".
-  const at = now(), paceStart = paceRun === run ? paceFrom : 0;
-  const rushed = state.settings.paceSeen && run.status === 'playing' && tooFastNext(run.strokes, paceStart, run.gap(at));
-  const r = run.type(k, at, rushed);
+  const r = run.type(k, now());
   if (r === 'ignored') return;
   const last = run.strokes.at(-1)!;
   recordPerformance(run, keys, trans, Date.now(), guided() ? run.text.length : 0);
@@ -705,8 +702,10 @@ function typeKey(k: string): void {
   else if (last.correct) sound.play('key');
   if (pulse && last.correct) $('beatDot').style.setProperty('--fill', onBeat(performance.now(), pulse.t0, pulse.interval).toFixed(2));
   // PACE-01: over the live speed limit, the pace modal opens right now, mid-passage.
-  if (rushed) flagTooFast();
-  const fast = !state.settings.paceSeen && paceWatched() && tooFastNow(run.strokes, paceStart);
+  // PACE-01: over 90 BPM a yellow "Slow down", over 110 a red "Too fast!" (the very first time, the modal). Never blocks a press.
+  const level = paceWatched() ? paceLevel(run.strokes, paceRun === run ? paceFrom : 0) : null;
+  const fast = level === 'fast' && !state.settings.paceSeen;
+  if (level && !fast) flagPace(level); else if (!level) $('tooFast').classList.remove('show');
   if (r === 'done') {
     canvasPrompt?.onComplete();
     stopPulse(); finish(); if (fast) openPace(last.key); return;
@@ -758,20 +757,16 @@ function stopDemo(): void {
 }
 function practiseSlowly(): void { closePace(); if (run.status === 'idle' || !run.text) return; mode = { kind: 'slow', text: run.text }; resetRun(); }
 const paceModal = () => $('paceModal');
-/** "Too fast!" over the letter still waited on. */
-function flagTooFast(): void {
-  const el = $('tooFast');
+/** "Slow down" (yellow) or "Too fast!" (red) over the next letter; a showing tag is only replaced by a stronger one. */
+function flagPace(level: 'fast' | 'warn'): void {
+  const el = $('tooFast'), showing = el.classList.contains('show') && el.getAnimations().some(a => a.playState === 'running');
+  if (showing && (level === 'warn' || !el.classList.contains('warn'))) return;
   const r = canvasPrompt ? null : document.querySelector('#prompt .ch.current')?.getBoundingClientRect();
   const box = canvasPrompt ? canvasPrompt.glyphBox(run.pos) : r ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
   if (!box) return;
   el.style.left = `${box.x + box.w / 2}px`; el.style.top = `${box.y - 6}px`;
-  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
-}
-/** After the first modal, the small beat-keeping key replaces the first header column. */
-function paceBadge(): void {
-  $('paceBadge').hidden = !state.settings.paceSeen; $('summaryCol').hidden = state.settings.paceSeen;
-  $('paceRule').textContent = PACE_RULE;
-  $('paceMiniKey').style.setProperty('--beat', `${Math.round(60_000 / PACE_BPM)}ms`);
+  el.textContent = level === 'fast' ? 'Too fast!' : 'Slow down';
+  el.classList.remove('show'); el.classList.toggle('warn', level === 'warn'); void el.offsetWidth; el.classList.add('show');
 }
 /** The live pace check is universal: every run, every mode, every chapter. */
 const paceWatched = (): boolean => !paceModal().classList.contains('open');
@@ -781,30 +776,14 @@ let paceRun: Run | null = null, paceFrom = 0;
 function openPace(key: string): void {
   $('paceKey').textContent = key === ' ' ? '␣' : key.toUpperCase();
   paceModal().style.setProperty('--beat', `${Math.round(60_000 / PACE_BPM)}ms`);
-  $('paceTitle').textContent = PACE_TITLE; $('paceNote').textContent = PACE_NOTE; $('paceModalRule').textContent = PACE_RULE;
-  $('paceMiniKey').textContent = $('paceKey').textContent;
+  $('paceTitle').textContent = PACE_TITLE; $('paceNote').textContent = PACE_NOTE;
   paceModal().classList.add('open'); $('closePace').focus();
 }
 function closePace(): void {
   if (!paceModal().classList.contains('open')) return;
   paceRun = run; paceFrom = run.strokes.length;
-  const from = $('paceKey').getBoundingClientRect();
   paceModal().classList.remove('open'); (document.activeElement as HTMLElement | null)?.blur();
-  const first = !state.settings.paceSeen;
-  state.settings.paceSeen = true; save(); paceBadge();
-  if (first) shrinkPaceKey(from);
-}
-/** The modal's key shrinks into its place in the header, where it keeps the beat from now on. */
-function shrinkPaceKey(from: DOMRect): void {
-  const mini = $('paceMiniKey'), to = mini.getBoundingClientRect();
-  if (!to.width || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const ghost = document.createElement('span');
-  ghost.className = 'pace-key'; ghost.textContent = mini.textContent; ghost.setAttribute('aria-hidden', 'true');
-  Object.assign(ghost.style, { position: 'fixed', left: `${from.left}px`, top: `${from.top}px`, width: `${from.width}px`, height: `${from.height}px`, margin: '0', zIndex: '40', animation: 'none', background: 'var(--orange)', color: '#fff', borderColor: 'var(--orange)' });
-  document.body.append(ghost); mini.style.visibility = 'hidden';
-  const dx = to.left + to.width / 2 - (from.left + from.width / 2), dy = to.top + to.height / 2 - (from.top + from.height / 2);
-  const anim = ghost.animate([{ transform: 'none', opacity: 1 }, { transform: `translate(${dx}px,${dy}px) scale(${to.width / from.width})`, opacity: 1 }], { duration: 650, easing: 'cubic-bezier(.5,0,.2,1)' });
-  anim.onfinish = () => { ghost.remove(); mini.style.visibility = ''; };
+  state.settings.paceSeen = true; save();
 }
 /** What Continue opens next on the way to `lesson`: a finger stop woven before it (DEC-20), or the lesson itself. */
 function stepName(lesson: Trail): string {
@@ -1129,7 +1108,6 @@ $('resetBtn').onclick = () => {
   if (!confirm('Are you really, really sure? There is no undo.')) return;
   { state = fresh(); keys = new KeyModel(); trans = new TransitionModel(); mode = { kind: 'trail' }; gate = null; replayReturn = null; setMethod(state.settings.method); save(); syncSettingsUi(); resetRun(); settingsModal().classList.remove('open'); toast('Fresh grove.'); } };
 function syncSettingsUi(): void {
-  paceBadge();
   $('codeBtn').textContent = 'Code grove: ' + (state.settings.codeGrove ? 'on' : 'off');
   $('methodBtn').textContent = 'Method: ' + activeMethod().name;
   // One official method: nothing to choose, so neither the control nor its explanation is shown.

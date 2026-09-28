@@ -4,7 +4,7 @@ import { lessonExercises } from '../curriculum/lesson-flow';
 import { fresh, sanitize } from '../state/save';
 import { mergeProgress } from '../state/progress-sync';
 import { KeyModel } from './keymodel';
-import { LIVE_WINDOW, PACE_NOTE, PACE_RULE, freshPace, tooFastNext, tooFastNow, medianInterval, notePace, paceFactor, paceNoteApplies, relaxedIntervalMs, typedFast } from './pace';
+import { LIVE_WINDOW, PACE_NOTE, freshPace, paceLevel, tooFastNow, medianInterval, notePace, paceFactor, paceNoteApplies, relaxedIntervalMs, typedFast } from './pace';
 import { applyRun } from './progress';
 import { Run } from './run';
 
@@ -55,36 +55,29 @@ describe('pace note (PACE-01)', () => {
   });
 });
 
-describe('live speed limit (PACE-01)', () => {
-  it('trips within a few presses above 100 BPM, never at or below it', () => {
-    expect(tooFastNow(typed('dededede', 500).strokes)).toBe(true);
-    expect(tooFastNow(typed('dededede', 600).strokes)).toBe(false);
-    expect(tooFastNow(typed('dededede', 900).strokes)).toBe(false);
-    expect(tooFastNow(typed('ded', 100).strokes)).toBe(false);
+describe('live pace warnings (PACE-01)', () => {
+  it('red over 110 BPM, yellow over 90, nothing at or under 90', () => {
+    expect(paceLevel(typed('dededede', 400).strokes)).toBe('fast');   // 150 BPM
+    expect(paceLevel(typed('dededede', 600).strokes)).toBe('warn');   // 100 BPM
+    expect(paceLevel(typed('dededede', 700).strokes)).toBeNull();     // ~86 BPM
+    expect(paceLevel(typed('ded', 100).strokes)).toBeNull();          // too few presses to judge
+  });
+  it('clears on the first slow press', () => {
+    const run = new Run('dededede'); let now = 0; run.begin(now);
+    for (const c of 'dededed') { now += 300; run.type(c, now); }
+    expect(paceLevel(run.strokes)).toBe('fast');
+    run.type('e', now + 900);
+    expect(paceLevel(run.strokes)).toBeNull();
   });
   it('counts only presses after `from`, so a closed modal needs a fresh window', () => {
     const run = typed('dededededede', 200);
     expect(tooFastNow(run.strokes, run.strokes.length)).toBe(false);
     expect(tooFastNow(run.strokes, run.strokes.length - LIVE_WINDOW)).toBe(true);
   });
-});
-
-describe('rushed presses (PACE-01, after the first modal)', () => {
-  it('judges the press about to land together with the ones before it', () => {
-    const steady = typed('dededede', 700).strokes;
-    expect(tooFastNext(steady, 0, 700)).toBe(false);
-    expect(tooFastNext(steady, 0, 100)).toBe(false); // one quick press among steady ones is fine
-    expect(tooFastNext(typed('dededede', 300).strokes, 0, 300)).toBe(true);
-    expect(tooFastNext([], 0, 50)).toBe(false);
-    expect(tooFastNext(typed('dededede', 150).strokes, 0, 700)).toBe(false); // slowing down counts at once
+  it('never costs a press: the run itself is untouched', () => {
+    const run = typed('dededede', 100);
+    expect(run.errors).toBe(0); expect(run.status).toBe('complete');
   });
-  it('a rushed press is a miss even on the right key, and does not advance', () => {
-    const run = new Run('dd'); run.begin(0);
-    expect(run.type('d', 100, true)).toBe('miss');
-    expect(run.pos).toBe(0); expect(run.errors).toBe(1);
-    expect(run.type('d', 900)).toBe('ok');
-  });
-  it('the rule says nothing numeric', () => expect(PACE_RULE).not.toMatch(/\d|wpm|bpm/i));
 });
 
 describe('established pace (PACE-02)', () => {

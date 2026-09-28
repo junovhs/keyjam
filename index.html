@@ -232,17 +232,8 @@ kbd{font:inherit}
 .pace-body h2{font-size:27px}
 .pace-body p{margin:10px 0 0;color:var(--ink);font-size:15.5px;line-height:1.55}
 .pace-body .modal-actions button{font-size:10px}
-.pace-body .pace-rule{font-weight:650;color:var(--orange)}
-.pace-badge{display:flex;align-items:center;gap:14px}
-.pace-badge[hidden]{display:none}
-.pace-badge p{font-size:15px;max-width:230px}
-.pace-key-mini{flex:none;width:52px;height:52px;border-width:1.5px;border-radius:10px;font-size:24px;animation-name:pace-flash-mini}
-@keyframes pace-flash-mini{
-  0%{background:var(--orange);border-color:var(--orange);color:#fff;transform:translateY(3px);box-shadow:0 1px 0 #c73d0c,0 0 0 6px rgba(255,84,24,.2),0 0 18px rgba(255,84,24,.5)}
-  35%{background:var(--orange);border-color:var(--orange);color:#fff;transform:translateY(0);box-shadow:0 4px 0 #c73d0c,0 0 0 2px rgba(255,84,24,.1)}
-  100%{background:#fff;border-color:var(--line-strong);color:var(--ink);transform:translateY(0);box-shadow:0 4px 0 #d9d5cc,0 6px 12px rgba(17,17,15,.1)}
-}
 .too-fast{position:fixed;left:0;top:0;z-index:25;padding:5px 10px;border-radius:5px;background:#ff2d55;color:#fff;font:800 13px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;pointer-events:none;opacity:0;transform:translate(-50%,-100%)}
+.too-fast.warn{background:#ffc21a;color:#2b2100}
 .too-fast.show{animation:too-fast 1.1s ease-out forwards}
 @keyframes too-fast{0%{opacity:0;transform:translate(-50%,-80%) scale(.8)}12%{opacity:1;transform:translate(-50%,-100%) scale(1.08)}22%{transform:translate(-50%,-100%) scale(1)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-150%)}}
 @media (max-width:520px){.pace-body{padding:18px 16px 20px}.pace-body h2{font-size:22px}}
@@ -382,9 +373,7 @@ kbd{font:inherit}
             <p id="lessonCopy"></p>
           </div>
           <aside class="info-cols">
-            <!-- PACE-01: once the too-fast modal has shown, its key shrinks to here and keeps the beat. -->
-            <div class="info-col pace-badge" id="paceBadge" hidden><span class="pace-key pace-key-mini" id="paceMiniKey" aria-hidden="true">F</span><div><small>Keep to this beat</small><p id="paceRule"></p></div></div>
-            <div class="info-col" id="summaryCol"><small id="summaryLabel">Lesson goal</small><p id="focusName">Build accuracy and consistency.</p></div>
+            <div class="info-col"><small id="summaryLabel">Lesson goal</small><p id="focusName">Build accuracy and consistency.</p></div>
             <div class="info-col"><small id="gateLabel">Any speed passes</small><p id="focusInstruction"></p></div>
           </aside>
         </section>
@@ -477,7 +466,7 @@ kbd{font:inherit}
 </div>
 
 <div class="toast" id="toast"></div>
-<div class="too-fast" id="tooFast" aria-live="assertive">Too fast!</div>
+<div class="too-fast" id="tooFast" aria-live="polite"></div>
 <div class="dev-bar" id="devBar" role="region" aria-label="Dev sandbox" hidden>
   <b title="Everything open · charms shown · saved in this tab only · account sync off">Dev sandbox</b>
   <span id="devWhere"></span>
@@ -511,7 +500,6 @@ kbd{font:inherit}
       <span class="eyebrow">Too fast</span>
       <h2 id="paceTitle"></h2>
       <p id="paceNote"></p>
-      <p class="pace-rule" id="paceModalRule"></p>
       <div class="modal-actions">
         <button class="primary" id="practiseSlowly" type="button">Practise this slowly</button>
         <button id="closePace" type="button">I’ll slow down</button>

@@ -48,22 +48,27 @@ export function medianInterval(strokes: readonly Keystroke[]): number | null {
   return lats.length >= 6 ? median(lats) : null;
 }
 
-/** The live speed limit: presses faster than 100 a minute (~20 WPM) open the pace modal mid-run. */
-export const PACE_LIMIT_BPM = 100;
+/** Above this many presses a minute a press is tagged "Too fast!" in red (and the one-time modal opens). */
+export const PACE_FAST_BPM = 110;
+/** Above this many a minute, a yellow "Slow down" tag: an early warning. Neither tag ever blocks or costs a press. */
+export const PACE_WARN_BPM = 90;
 /** Presses the live check looks back over: few enough to be instant, enough that one quick pair never trips it. */
 export const LIVE_WINDOW = 4;
-/**
- * Would a press arriving `gapMs` after the last one tip the recent pace over the limit? (Needs an earlier press in the run.)
- * A press that is itself at or under the beat never is: slowing down is felt on the very next key.
- */
-export function tooFastNext(strokes: readonly Keystroke[], from: number, gapMs: number): boolean {
-  if (!strokes.length || gapMs >= 60_000 / PACE_LIMIT_BPM) return false;
-  return tooFastNow([...strokes, { key: '', typed: '', index: -1, correct: true, latencyMs: gapMs }], from);
-}
-/** True the moment the last few presses (from `from` on; any key, right or wrong) typically came faster than PACE_LIMIT_BPM. */
-export function tooFastNow(strokes: readonly Keystroke[], from = 0): boolean {
+/** True when the last few presses (from `from` on; any key, right or wrong) typically came faster than `bpm`. */
+export function tooFastNow(strokes: readonly Keystroke[], from = 0, bpm = PACE_FAST_BPM): boolean {
   const lats = strokes.slice(Math.max(1, from)).map((s) => s.latencyMs).filter((ms) => ms < 2000).slice(-LIVE_WINDOW);
-  return lats.length >= LIVE_WINDOW && median(lats) < 60_000 / PACE_LIMIT_BPM;
+  return lats.length >= LIVE_WINDOW && median(lats) < 60_000 / bpm;
+}
+/**
+ * The warning for the press just made: 'fast' over PACE_FAST_BPM, 'warn' over PACE_WARN_BPM, else null.
+ * The press itself must also be over the line, so slowing down clears the warning on the very next key.
+ */
+export function paceLevel(strokes: readonly Keystroke[], from = 0): 'fast' | 'warn' | null {
+  const last = strokes.at(-1)?.latencyMs ?? Infinity;
+  for (const [level, bpm] of [['fast', PACE_FAST_BPM], ['warn', PACE_WARN_BPM]] as const) {
+    if (last < 60_000 / bpm && tooFastNow(strokes, from, bpm)) return level;
+  }
+  return null;
 }
 
 /** Ms per press at the chapter's relaxed pace (its wpmTarget; a word is five characters). */
@@ -84,6 +89,4 @@ export const PACE_BPM = 78;
 /** The pace modal's heading. */
 export const PACE_TITLE = 'Slow down. This isn’t a race.';
 /** The pace modal's message: about technique, with no number and no claim about the finger used. */
-/** What changes once the modal has shown: said in the modal and beside the small key. */
-export const PACE_RULE = 'From now on, a press faster than this beat counts as a miss.';
 export const PACE_NOTE = "Going fast isn't the point. Here it actually works against what this app is for. We're slowly programming good muscle memory into your fingers, and that only happens slowly: one calm, correct press at a time, with each key on the finger shown.";
