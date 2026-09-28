@@ -1,7 +1,9 @@
 import type { Band, Flow, Glyph } from './textflow';
 
+/** How long a letter typed too quickly for the fall takes to fade out, in seconds. */
+export const PLAIN_FADE_S = 0.013;
 /** A typed glyph that has been cut loose: it tumbles down the page under gravity. Pooled; `life` ≤ 0 means free. */
-interface Ragdoll { ch: string; x: number; y: number; w: number; h: number; vx: number; vy: number; rot: number; vr: number; life: number; ttl: number }
+interface Ragdoll { ch: string; x: number; y: number; w: number; h: number; vx: number; vy: number; rot: number; vr: number; life: number; ttl: number; plain: boolean }
 /** A hot fleck thrown off a miss. Drawn as a short streak along its velocity. */
 interface Spark { x: number; y: number; vx: number; vy: number; life: number; ttl: number; size: number }
 
@@ -18,7 +20,7 @@ const POP_MS = 140;
  * box returns to waiting. Pools are fixed; tick() allocates nothing.
  */
 export class Effects {
-  readonly ragdolls: Ragdoll[] = Array.from({ length: 160 }, () => ({ ch: '', x: 0, y: 0, w: 0, h: 0, vx: 0, vy: 0, rot: 0, vr: 0, life: 0, ttl: 1 }));
+  readonly ragdolls: Ragdoll[] = Array.from({ length: 160 }, () => ({ ch: '', x: 0, y: 0, w: 0, h: 0, vx: 0, vy: 0, rot: 0, vr: 0, life: 0, ttl: 1, plain: false }));
   readonly sparks: Spark[] = Array.from({ length: 160 }, () => ({ x: 0, y: 0, vx: 0, vy: 0, life: 0, ttl: 1, size: 1 }));
   private liveRagdolls = 0;
   private liveSparks = 0;
@@ -60,16 +62,19 @@ export class Effects {
   /**
    * A correct key on glyph `g`: cut it loose. It gets a small kick (up and to the side, away from the
    * cursor's direction of travel), starts tumbling, and falls under gravity until it leaves the page.
-   * `h` is the drawn height of a Space pill; letters ignore it.
+   * `h` is the drawn height of a Space pill; letters ignore it. `plain` (typed faster than the perfect pace, PACE-01):
+   * no fall, no kick, no heat — the glyph just fades out in PLAIN_FADE_S. The fall is the reward for going slowly.
    */
-  hit(g: Glyph, now: number, strong = false, h = 0): void {
+  hit(g: Glyph, now: number, strong = false, h = 0, plain = false): void {
     void now;
     if (!this.enabled) return;
     const r = this.ragdolls.find((x) => x.life <= 0);
     if (!r) return;
     r.ch = g.ch; r.x = g.x + g.w / 2; r.y = g.y; r.w = g.w; r.h = h;
+    r.plain = plain; r.rot = 0;
+    if (plain) { r.vx = r.vy = r.vr = 0; r.ttl = PLAIN_FADE_S; r.life = r.ttl; this.liveRagdolls++; return; }
     r.vx = (this.rnd() - 0.5) * 220 - 40; r.vy = -(140 + this.rnd() * 160);
-    r.rot = 0; r.vr = (this.rnd() - 0.5) * 16 + (r.vx < 0 ? -3 : 3);
+    r.vr = (this.rnd() - 0.5) * 16 + (r.vx < 0 ? -3 : 3);
     r.ttl = 1.5; r.life = r.ttl;
     this.liveRagdolls++;
     this.heat = Math.min(1, this.heat + (strong ? 0.12 : 0.07));
@@ -199,7 +204,7 @@ export class Effects {
         if (r.life <= 0) continue;
         const t = r.life / r.ttl;
         ctx.save();
-        ctx.globalAlpha = Math.min(1, t * 4); // solid on the way down, gone only at the very end
+        ctx.globalAlpha = r.plain ? t : Math.min(1, t * 4); // a plain fade is linear; a fall stays solid until the very end
         ctx.translate(ox + r.x, oy + r.y + lineHeight / 2);
         ctx.rotate(r.rot);
         if (r.ch === ' ') {

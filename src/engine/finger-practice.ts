@@ -7,13 +7,28 @@ import { fingerLevels, fingerCourseId, pairCompleted, FINGER_PASS_ACC, FINGER_PA
 export { FINGER_PAGES };
 import type { Run } from './run';
 
-/** Require enough correct target presses to distinguish familiarity from a few lucky hits. */
-export const MIN_FINGER_HITS = 20;
+/**
+ * Require enough correct target presses, across a whole stop, to distinguish familiarity from a few lucky hits.
+ * Pages are short (PAGE_MAX_CHARS), so a rare-key finger (a pinky) may see only a dozen or so over three pages.
+ */
+export const MIN_FINGER_HITS = 12;
+/** The longest page, in characters: three short lines. Slow typing is the point, so a page stays short enough to stay fun. */
+export const PAGE_MAX_CHARS = 60;
+/** Cut a page to PAGE_MAX_CHARS at a word boundary (a single over-long token is kept whole). */
+export function trimPage(text: string): string {
+  if (text.length <= PAGE_MAX_CHARS) return text;
+  const cut = text.lastIndexOf(' ', PAGE_MAX_CHARS);
+  return cut > 0 ? text.slice(0, cut) : text;
+}
 /** Snapshot of the sides deliberately exercised by this passage; incidental word letters cannot earn a level. */
 export interface FingerPractice { text: string; sides: readonly FingerId[]; helperKeys: string[] }
 
 /** Alternate both sides' tokens, or concentrate on the unfinished side after a partial pass. */
 export function fingerPractice(pair: FingerPair, level: number, progress: Readonly<Record<string, number>>, opts: { known?: ReadonlySet<string>; seed?: number; page?: number } = {}): FingerPractice {
+  const p = buildPage(pair, level, progress, opts);
+  return { ...p, text: trimPage(p.text) };
+}
+function buildPage(pair: FingerPair, level: number, progress: Readonly<Record<string, number>>, opts: { known?: ReadonlySet<string>; seed?: number; page?: number }): FingerPractice {
   const pending = pair.sides.filter(id => (progress[fingerCourseId(id)] ?? 0) <= level);
   const sides: readonly FingerId[] = pending.length ? pending : pair.sides;
   const page = opts.page ?? 0;
@@ -103,10 +118,16 @@ export function fingerPractice(pair: FingerPair, level: number, progress: Readon
   const cap = (w: string, i: number) => i % 2 ? w.toUpperCase() : w[0]!.toUpperCase() + w.slice(1);
   const tokens: string[] = [];
   if (level === 6) tokens.push(...shuffle(lower, r).slice(0, 2));
-  if (level === 9) tokens.push(...shuffle(lines, r).slice(0, 2));
-  // The gauntlet touches every key these fingers own: each letter in CAPITALS, every digit, every symbol the learner has met.
-  if (level === 9) for (const k of owned.filter(k => /[a-z]/.test(k))) { const w = vocab.find(w => w.includes(k)) ?? k; tokens.push(w, w.toUpperCase()); }
-  if (level === 9) tokens.push(digits.join(''), ...symbols.map(k => k + baseKey(k)));
+  // The gauntlet touches every key these fingers own across its pages: each letter in CAPITALS, every digit, every symbol
+  // the learner has met. Each page carries its share, so a short page still leaves the whole stop complete.
+  if (level === 9) {
+    const must: string[] = [];
+    const shortest = [...vocab].sort((a, b) => a.length - b.length);
+    for (const k of owned.filter(k => /[a-z]/.test(k))) { const w = shortest.find(w => w.includes(k)) ?? k; must.push(w, w.toUpperCase()); }
+    must.push(...(digits.length ? [digits.join('')] : []), ...symbols.map(k => k + baseKey(k)));
+    tokens.push(...must.filter((_, i) => i % FINGER_PAGES === page % FINGER_PAGES));
+  }
+  const room = (extra: string) => [...tokens, extra].filter(Boolean).join(' ').length <= PAGE_MAX_CHARS;
   for (let i = 0; !done(tokens) && i < 200; i++) {
     const deficit = sides.find(id => count(tokens.join(' '), id) < target) ?? sides[0]!;
     const choices = pool.filter(w => [...w].some(k => fingerOf(k) === deficit));
@@ -117,6 +138,7 @@ export function fingerPractice(pair: FingerPair, level: number, progress: Readon
     else if (level === 8) tokens.push(word, num + sym, ...(sym ? [sym + word] : []));
     else if (level === 9) tokens.push(i % 4 === 0 ? cap(word, 0) : word, ...(i % 3 === 0 && num ? [num] : []), ...(i % 2 === 0 && sym ? [sym] : []), ...(i % 5 === 4 && allowed.has('.') ? ['.'] : []));
     else tokens.push(word);
+    if (!room('')) break;
   }
   let text = tokens.filter(Boolean).join(' ').replace(/ \./g, '.');
   if (level === 9 && !/[.]$/.test(text) && allowed.has('.')) text += '.';
@@ -176,8 +198,10 @@ export interface SideScore { id: FingerId; hits: number; attempts: number; acc: 
 export function sideScores(pair: FingerPair, practice: FingerPractice, run: PageRun): SideScore[] {
   return practice.sides.filter(id => pair.sides.includes(id as Exclude<FingerId, 'thumb'>)).map(id => {
     const strokes = run.strokes.filter(s => fingerOf(s.key) === id), hits = strokes.filter(s => s.correct).length;
+    // A short page (PAGE_MAX_CHARS) may hold fewer than MIN_PAGE_HITS of a side's keys: then every one of them is needed.
+    const need = Math.min(MIN_PAGE_HITS, [...practice.text].filter(k => fingerOf(k) === id).length);
     // Exact ratio: 94.6% must not pass because the display rounds it to 95%.
-    return { id, hits, attempts: strokes.length, acc: strokes.length ? Math.floor((hits / strokes.length) * 100) : 100, passed: hits >= MIN_PAGE_HITS && hits * 100 >= strokes.length * FINGER_PASS_ACC };
+    return { id, hits, attempts: strokes.length, acc: strokes.length ? Math.floor((hits / strokes.length) * 100) : 100, passed: hits >= need && hits * 100 >= strokes.length * FINGER_PASS_ACC };
   });
 }
 /** Correct presses a side needs on one page. */

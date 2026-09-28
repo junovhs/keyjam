@@ -5,7 +5,7 @@ import { fingerById } from '../curriculum/fingers';
 import { fresh, sanitize } from '../state/save';
 import { mergeProgress } from '../state/progress-sync';
 import { Run } from './run';
-import { completeFingerPages, completeFingerPractice, fingerPages, fingerPractice, FINGER_PAGES, MIN_FINGER_HITS, type FingerPractice } from './finger-practice';
+import { completeFingerPages, completeFingerPractice, fingerPages, fingerPractice, FINGER_PAGES, MIN_FINGER_HITS, PAGE_MAX_CHARS, type FingerPractice } from './finger-practice';
 
 const index = FINGER_PAIRS[0]!;
 afterEach(() => setMethod(DEFAULT_METHOD_ID));
@@ -47,7 +47,7 @@ it('qualifies the left independently when the right misses, using wanted rather 
 });
 
 it('requires sufficient evidence and an exact 95% ratio', () => {
-  for (const [hits, misses, qualifies] of [[19, 0, false], [20, 0, true], [38, 2, true], [35, 2, false]] as const) {
+  for (const [hits, misses, qualifies] of [[MIN_FINGER_HITS - 1, 0, false], [MIN_FINGER_HITS, 0, true], [38, 2, true], [35, 2, false]] as const) {
     const progress: Record<string, number> = {};
     const practice: FingerPractice = { text: 'f'.repeat(hits), sides: ['li'], helperKeys: [] };
     completeFingerPractice(progress, index, 0, practice, typePassage(practice.text, { li: misses }));
@@ -74,15 +74,18 @@ for (const method of METHODS) it(`all paired levels are passable with enough com
   for (const pair of FINGER_PAIRS) {
     const progress: Record<string, number> = {};
     for (let level = 0; level < FINGER_LEVEL_COUNT; level++) {
-      const practice = fingerPractice(pair, level, progress);
+      // Each page is short (PAGE_MAX_CHARS); the stop's pages together carry enough of each side, and the gauntlet every key.
+      const pages = fingerPages(pair, level, progress);
+      const all = pages.map(p => p.text).join(' ');
+      for (const p of pages) expect(p.text.length).toBeLessThanOrEqual(PAGE_MAX_CHARS);
       for (const id of pair.sides) {
-        expect([...practice.text].filter(k => fingerOf(k) === id).length).toBeGreaterThanOrEqual(MIN_FINGER_HITS);
+        expect([...all].filter(k => fingerOf(k) === id).length).toBeGreaterThanOrEqual(MIN_FINGER_HITS);
         if (level === 9) for (let n = 33; n <= 126; n++) {
           const key = String.fromCharCode(n);
-          if (fingerOf(key) === id) expect(practice.text).toContain(key);
+          if (fingerOf(key) === id) expect(all).toContain(key);
         }
       }
-      expect(completeFingerPractice(progress, pair, level, practice, typePassage(practice.text)).passed).toBe(true);
+      expect(completeFingerPages(progress, pair, level, pages, pages.map(p => typePassage(p.text))).passed).toBe(true);
       expect(pairCompleted(progress, pair)).toBe(level + 1);
     }
     const replay = fingerPractice(pair, 0, progress);

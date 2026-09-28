@@ -93,6 +93,15 @@ export function perfectRecent(strokes: readonly Keystroke[], from = 0): boolean 
   return lats.length >= LIVE_WINDOW && perfectGap(meanGap(lats));
 }
 /**
+ * Is the typing right now at the perfect pace (PACE_PERFECT_WPM or slower, 25 itself included)? The latest LIVE_WINDOW
+ * presses on average, pauses left out; the first press of a run (nothing to judge yet) counts as perfect.
+ * Only then do typed letters get the falling effect.
+ */
+export function perfectPace(strokes: readonly Keystroke[]): boolean {
+  const gap = meanGap(strokes.slice(1).map((s) => s.latencyMs).filter((ms) => ms < 2000).slice(-LIVE_WINDOW));
+  return gap === null || perfectGap(gap);
+}
+/**
  * Was the word just finished (the last stroke is its correct Space) typed at an average of PACE_PERFECT_WPM or slower?
  * Its presses after the first letter count, the Space included; the pause before the word does not.
  */

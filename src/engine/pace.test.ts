@@ -4,7 +4,7 @@ import { lessonExercises } from '../curriculum/lesson-flow';
 import { fresh, sanitize } from '../state/save';
 import { mergeProgress } from '../state/progress-sync';
 import { KeyModel } from './keymodel';
-import { LIVE_WINDOW, PACE_NOTE, blockedNext, freshPace, paceLevel, perfectRecent, perfectWord, tooFastNow, medianInterval, notePace, paceFactor, paceNoteApplies, relaxedIntervalMs, typedFast } from './pace';
+import { LIVE_WINDOW, PACE_NOTE, blockedNext, freshPace, paceLevel, perfectPace, perfectRecent, perfectWord, tooFastNow, medianInterval, notePace, paceFactor, paceNoteApplies, relaxedIntervalMs, typedFast } from './pace';
 import { applyRun } from './progress';
 import { Run } from './run';
 
@@ -82,6 +82,12 @@ describe('live pace warnings (PACE-01)', () => {
     expect(perfectWord(at(500))).toBe(true);
     expect(perfectWord(at(300))).toBe(false);
     expect(perfectWord(typed('ded', 500).strokes)).toBe(false); // no Space: not a finished word
+  });
+  it('letters fall at 25 WPM or slower (25 included), and only fade when faster', () => {
+    expect(perfectPace(typed('dededede', 480).strokes)).toBe(true);  // exactly 25 WPM
+    expect(perfectPace(typed('dededede', 600).strokes)).toBe(true);  // 20 WPM
+    expect(perfectPace(typed('dededede', 470).strokes)).toBe(false); // just over 25
+    expect(perfectPace(typed('d', 10).strokes)).toBe(true);          // first press: nothing to judge yet
   });
   it('the first perfect comes from the latest four presses, on average', () => {
     expect(perfectRecent(typed('dededede', 500).strokes)).toBe(true);

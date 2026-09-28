@@ -2,7 +2,7 @@ import { lessonExercises, type LessonExercise, type SlotPick } from './curriculu
 import { nextPractice } from './engine/next-practice';
 import { beatInterval, evenness, onBeat } from './engine/beat';
 import { demoSchedule, demoStepMs, type DemoStep } from './engine/demo';
-import { PACE_BPM, PACE_NOTE, PACE_TITLE, blockedNext, notePace, paceLevel, perfectRecent, perfectWord } from './engine/pace';
+import { PACE_BPM, PACE_NOTE, PACE_TITLE, blockedNext, notePace, paceLevel, perfectPace, perfectRecent, perfectWord } from './engine/pace';
 import { briefingFor, SHIFT_TOKEN, type BriefIcon, type Briefing } from './curriculum/briefings';
 import { fingerPractice, completeFingerPage, FINGER_PAGES, type FingerPractice, type SideScore } from './engine/finger-practice';
 import type { Stop } from './curriculum/stops';
@@ -698,7 +698,8 @@ function typeKey(k: string): void {
   if (r === 'ignored') return;
   const last = run.strokes.at(-1)!;
   recordPerformance(run, keys, trans, Date.now(), guided() ? run.text.length : 0);
-  if (last.correct || !guided()) canvasPrompt?.onKey(last.correct ? 'ok' : 'miss', last.correct ? run.pos - 1 : run.pos, last.key === ' ');
+  // PACE-01: letters only fall at the perfect pace (25 WPM or slower); faster, they just fade out.
+  if (last.correct || !guided()) canvasPrompt?.onKey(last.correct ? 'ok' : 'miss', last.correct ? run.pos - 1 : run.pos, last.key === ' ', !perfectPace(run.strokes));
   // The keystroke tick rises a hair with the combo, so a clean run audibly warms up; a miss is a low shrug.
   if (!last.correct && !guided()) sound.play('miss');
   else if (last.correct && last.key === ' ') sound.play('word', 1, 1 + Math.min(run.combo, 40) * 0.004);
@@ -713,7 +714,7 @@ function typeKey(k: string): void {
   else if (level && !fast) flagPace(level);
   else if (!level && $('tooFast').dataset.level !== 'perfect') $('tooFast').classList.remove('show');
   if (paceRun !== run) { paceRun = run; paceFrom = 0; perfectStarted = false; }
-  if (!perfectStarted) { if (perfectRecent(run.strokes)) { perfectStarted = true; flagPace('perfect'); } }
+  if (!perfectStarted) { if (perfectRecent(run.strokes)) { perfectStarted = true; flagPace('perfect', run.pos, true); } }
   else if (last.correct && last.key === ' ' && perfectWord(run.strokes)) {
     const end = run.pos - 1, start = run.text.lastIndexOf(' ', end - 1) + 1;
     flagPace('perfect', Math.floor((start + end - 1) / 2));
@@ -770,9 +771,12 @@ function stopDemo(): void {
 function practiseSlowly(): void { closePace(); if (run.status === 'idle' || !run.text) return; mode = { kind: 'slow', text: run.text }; resetRun(); }
 const paceModal = () => $('paceModal');
 const PACE_TAGS = { fast: 'Too fast!', warn: 'Slow down', perfect: 'Perfect speed' } as const;
+/** The ten perfect-pace callouts, one holographic shape each (.holo-N). The first of a run is always "Perfect speed". */
+const PERFECT_CALLOUTS = ['Perfect speed', 'Radical!', 'Tubular!', 'Total legend', 'Amazing job', 'Silky smooth', 'TK Jewelers is a scam', "Chef's kiss", 'Zen mode', 'Buttery'] as const;
+let lastCallout = 0;
 const PACE_RANK = { perfect: 0, warn: 1, fast: 2 } as const;
 /** A pace tag over the next letter: red "Too fast!", yellow "Slow down", or the green shimmering "Perfect speed". */
-function flagPace(level: keyof typeof PACE_TAGS, at = run.pos): void {
+function flagPace(level: keyof typeof PACE_TAGS, at = run.pos, first = false): void {
   const el = $('tooFast'), showing = el.classList.contains('show') && el.getAnimations().some(a => (a as CSSAnimation).animationName === 'too-fast' && a.playState === 'running');
   const current = (el.dataset.level ?? 'perfect') as keyof typeof PACE_TAGS;
   // A showing tag is only replaced by a stronger one (a warning always outranks praise).
@@ -781,9 +785,14 @@ function flagPace(level: keyof typeof PACE_TAGS, at = run.pos): void {
   const box = canvasPrompt ? canvasPrompt.glyphBox(at) : r ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
   if (!box) return;
   el.style.left = `${box.x + box.w / 2}px`; el.style.top = `${box.y - 6}px`;
-  el.textContent = PACE_TAGS[level]; el.dataset.level = level;
-  el.classList.remove('show'); el.classList.toggle('warn', level === 'warn'); el.classList.toggle('perfect', level === 'perfect'); void el.offsetWidth; el.classList.add('show');
-  if (level === 'perfect') sound.play('sparkle', 0.45, 1.15);
+  let text: string = PACE_TAGS[level], shape = -1;
+  if (level === 'perfect') {
+    shape = first ? 0 : (lastCallout + 1 + Math.floor(Math.random() * (PERFECT_CALLOUTS.length - 1))) % PERFECT_CALLOUTS.length;
+    lastCallout = shape; text = PERFECT_CALLOUTS[shape]!;
+  }
+  $('tooFastTag').textContent = text; el.dataset.level = level;
+  el.className = `too-fast ${level === 'warn' ? 'warn' : level === 'perfect' ? `perfect holo-${shape}` : ''}`; void el.offsetWidth; el.classList.add('show');
+  if (level === 'perfect') sound.play('sparkle', 0.35, 1.15);
 }
 /** The live pace check is universal: every run, every mode, every chapter. */
 const paceWatched = (): boolean => !paceModal().classList.contains('open');

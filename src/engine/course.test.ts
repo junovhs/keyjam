@@ -6,7 +6,7 @@ import { fresh } from '../state/save';
 import { STOPS } from '../curriculum/stops';
 import { KeyModel } from './keymodel';
 import { applyRun, currentStage, exerciseIndex, pendingStop, trailUnlocked } from './progress';
-import { completeFingerPractice, fingerPractice } from './finger-practice';
+import { completeFingerPage, fingerPractice, FINGER_PAGES } from './finger-practice';
 import { generate } from './textgen';
 import { Run } from './run';
 import { recordPerformance } from './learning';
@@ -25,10 +25,15 @@ for (const method of METHODS) it(`${method.name}: the complete course and option
       for (let stop = pendingStop(state); stop; stop = pendingStop(state)) {
         expect(trailUnlocked(state, trail)).toBe(false);
         const known = new Set(MAIN_TRAILS.filter(t => state.trails[t.id]?.cleared).flatMap(t => [...t.newKeys]));
-        const practice = fingerPractice(stop.pair, stop.level, state.fingerCourses, { known, seed: stops });
-        const run = new Run(practice.text); run.begin(now);
-        for (const ch of practice.text) { now += 900; run.type(ch, now); }
-        expect(completeFingerPractice(state.fingerCourses, stop.pair, stop.level, practice, run).passed, stop.id).toBe(true);
+        // As in the app: each short page is judged on its own, and the last one passes the stop.
+        for (let page = 0; page < FINGER_PAGES; page++) {
+          const practice = fingerPractice(stop.pair, stop.level, state.fingerCourses, { known, seed: stops, page });
+          const run = new Run(practice.text); run.begin(now);
+          for (const ch of practice.text) { now += 900; run.type(ch, now); }
+          const judged = completeFingerPage(state.fingerCourses, state.stopPages, stop.id, stop.pair, stop.level, page, practice, run);
+          expect(judged.pagePassed, `${stop.id} page ${page + 1}`).toBe(true);
+          if (page === FINGER_PAGES - 1) expect(judged.stopPassed, stop.id).toBe(true);
+        }
         stops++;
       }
       expect(trailUnlocked(state, trail)).toBe(true);

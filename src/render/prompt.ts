@@ -94,7 +94,7 @@ export class CanvasPrompt {
   }
 
   /** Feed a key result so effects can react. `index` is the glyph that settled (ok) or the one still waited on (miss). */
-  onKey(kind: 'ok' | 'miss', index: number, strong = false): void {
+  onKey(kind: 'ok' | 'miss', index: number, strong = false, plain = false): void {
     const found = this.lastFlow?.glyphs.find((x) => x.index === index);
     const lh = this.flow.lineHeight;
     // Hand effects the glyph where it is drawn right now (animated, scrolled), not where the layout says it will be.
@@ -102,8 +102,8 @@ export class CanvasPrompt {
     const g = found ? { ...found, x: this.gplaced ? this.gx[found.index]! : found.x, y: this.gplaced ? this.gy[found.index]! : found.y - this.scroll * lh } : undefined;
     const now = performance.now();
     if (g && kind === 'ok') {
-      if (g.ch === ' ') { const p = this.spacePill(g); this.effects.hit({ ...g, x: p.x, w: p.w }, now, strong, p.h); }
-      else this.effects.hit(g, now, strong);
+      if (g.ch === ' ') { const p = this.spacePill(g); this.effects.hit({ ...g, x: p.x, w: p.w }, now, strong, p.h, plain); }
+      else this.effects.hit(g, now, strong, 0, plain);
     }
     if (g && kind === 'miss') this.effects.miss(g, now);
     this.ensureLoop();

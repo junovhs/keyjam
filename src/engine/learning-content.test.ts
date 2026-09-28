@@ -5,7 +5,7 @@ import { DEFAULT_METHOD_ID, METHODS, fingerOf, setMethod } from '../curriculum/m
 import { FINGER_PAIRS } from '../curriculum/finger-course';
 import { PRACTICE_WORDS, readablePhrases } from '../curriculum/language';
 import { generate } from './textgen';
-import { fingerPractice } from './finger-practice';
+import { fingerPages, fingerPractice, MIN_FINGER_HITS, PAGE_MAX_CHARS } from './finger-practice';
 afterEach(() => setMethod(DEFAULT_METHOD_ID));
 
 it('every planned exercise covers its assessed focus or explicitly guided keys, at a bounded length', () => {
@@ -59,13 +59,16 @@ it('hard paired levels stay inside what the learner knows, dense in the pair and
         const p = fingerPractice(pair, level, {}, { known, seed: 3 });
         expect(p.helperKeys).toEqual([]);
         expect(p.text).toMatch(/^[a-z ]+$/);
-        // Dense on purpose: at least 30 presses for each side, and at least a third of all letters on this pair.
-        for (const id of pair.sides) expect([...p.text].filter(k => fingerOf(k) === id).length).toBeGreaterThanOrEqual(30);
+        // Short (PAGE_MAX_CHARS) but dense: at least a third of all letters on this pair, and over a stop's pages
+        // enough presses for each side to judge it (MIN_FINGER_HITS).
+        expect(p.text.length).toBeLessThanOrEqual(PAGE_MAX_CHARS);
         expect([...p.text.replaceAll(' ', '')].filter(own).length * 3).toBeGreaterThanOrEqual(p.text.replaceAll(' ', '').length);
+        const stop = fingerPages(pair, level, {}, { known, seed: 3 }).map(q => q.text).join(' ');
+        for (const id of pair.sides) expect([...stop].filter(k => fingerOf(k) === id).length).toBeGreaterThanOrEqual(MIN_FINGER_HITS);
       }
-      const gauntlet = fingerPractice(pair, 9, {}, { seed: 2 }).text;
-      expect(gauntlet).toMatch(/[A-Z][a-z ,;:]+\./);
-      for (const id of pair.sides) expect([...gauntlet].filter(k => fingerOf(k) === id).length).toBeGreaterThanOrEqual(50);
+      const gauntlet = fingerPages(pair, 9, {}, { seed: 2 }).map(q => q.text);
+      for (const page of gauntlet) { expect(page.length).toBeLessThanOrEqual(PAGE_MAX_CHARS); expect(page).toMatch(/[A-Z]/); }
+      for (const id of pair.sides) expect([...gauntlet.join(' ')].filter(k => fingerOf(k) === id).length).toBeGreaterThanOrEqual(MIN_FINGER_HITS);
     }
   }
 });
