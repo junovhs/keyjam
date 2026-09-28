@@ -2,7 +2,7 @@ import { lessonExercises, type LessonExercise, type SlotPick } from './curriculu
 import { nextPractice } from './engine/next-practice';
 import { beatInterval, evenness, onBeat } from './engine/beat';
 import { demoSchedule, demoStepMs, type DemoStep } from './engine/demo';
-import { PACE_BPM, PACE_NOTE, PACE_TITLE, notePace, paceLevel } from './engine/pace';
+import { PACE_BPM, PACE_NOTE, PACE_TITLE, PERFECT_EVERY, blockedNext, notePace, paceLevel, perfectWord } from './engine/pace';
 import { briefingFor, SHIFT_TOKEN, type BriefIcon, type Briefing } from './curriculum/briefings';
 import { fingerPractice, completeFingerPage, FINGER_PAGES, type FingerPractice, type SideScore } from './engine/finger-practice';
 import type { Stop } from './curriculum/stops';
@@ -691,7 +691,10 @@ function continueAfterResult(firstKey?: string): void {
   if (firstKey !== undefined && !brief && firstKey === run.current) { begin(); typeKey(firstKey); }
 }
 function typeKey(k: string): void {
-  const r = run.type(k, now());
+  // PACE-01: once the modal has shown, a press over 50 WPM is blocked: a miss, tagged "Too fast!".
+  const at = now(), paceStart = paceRun === run ? paceFrom : 0;
+  const blocked = state.settings.paceSeen && run.status === 'playing' && paceWatched() && blockedNext(run.strokes, paceStart, run.gap(at));
+  const r = run.type(k, at, blocked);
   if (r === 'ignored') return;
   const last = run.strokes.at(-1)!;
   recordPerformance(run, keys, trans, Date.now(), guided() ? run.text.length : 0);
@@ -702,10 +705,18 @@ function typeKey(k: string): void {
   else if (last.correct) sound.play('key');
   if (pulse && last.correct) $('beatDot').style.setProperty('--fill', onBeat(performance.now(), pulse.t0, pulse.interval).toFixed(2));
   // PACE-01: over the live speed limit, the pace modal opens right now, mid-passage.
-  // PACE-01: over the desired 110 BPM a yellow "Slow down", over 230 a red "Too fast!" (the very first time, the modal). Never blocks a press.
-  const level = paceWatched() ? paceLevel(run.strokes, paceRun === run ? paceFrom : 0) : null;
+  // PACE-01: over 36 WPM a yellow "Slow down"; over 50 the first time opens the modal, after that the press is blocked.
+  // Three words in a row at 25 WPM or slower earn a green "Perfect speed".
+  const level = paceWatched() ? paceLevel(run.strokes, paceStart) : null;
   const fast = level === 'fast' && !state.settings.paceSeen;
-  if (level && !fast) flagPace(level); else if (!level) $('tooFast').classList.remove('show');
+  if (blocked) flagPace('fast');
+  else if (level && !fast) flagPace(level);
+  else if (!level && $('tooFast').dataset.level !== 'perfect') $('tooFast').classList.remove('show');
+  if (paceRun !== run) { paceRun = run; paceFrom = 0; perfectRun = 0; }
+  if (last.correct && last.key === ' ') {
+    perfectRun = perfectWord(run.strokes) ? perfectRun + 1 : 0;
+    if (perfectRun >= PERFECT_EVERY) { perfectRun = 0; const end = run.pos - 1, start = run.text.lastIndexOf(' ', end - 1) + 1; flagPace('perfect', Math.floor((start + end - 1) / 2)); }
+  }
   if (r === 'done') {
     canvasPrompt?.onComplete();
     stopPulse(); finish(); if (fast) openPace(last.key); return;
@@ -757,21 +768,28 @@ function stopDemo(): void {
 }
 function practiseSlowly(): void { closePace(); if (run.status === 'idle' || !run.text) return; mode = { kind: 'slow', text: run.text }; resetRun(); }
 const paceModal = () => $('paceModal');
-/** "Slow down" (yellow) or "Too fast!" (red) over the next letter; a showing tag is only replaced by a stronger one. */
-function flagPace(level: 'fast' | 'warn'): void {
-  const el = $('tooFast'), showing = el.classList.contains('show') && el.getAnimations().some(a => a.playState === 'running');
-  if (showing && (level === 'warn' || !el.classList.contains('warn'))) return;
+const PACE_TAGS = { fast: 'Too fast!', warn: 'Slow down', perfect: 'Perfect speed' } as const;
+const PACE_RANK = { perfect: 0, warn: 1, fast: 2 } as const;
+/** A pace tag over the next letter: red "Too fast!", yellow "Slow down", or the green shimmering "Perfect speed". */
+function flagPace(level: keyof typeof PACE_TAGS, at = run.pos): void {
+  const el = $('tooFast'), showing = el.classList.contains('show') && el.getAnimations().some(a => (a as CSSAnimation).animationName === 'too-fast' && a.playState === 'running');
+  const current = (el.dataset.level ?? 'perfect') as keyof typeof PACE_TAGS;
+  // A showing tag is only replaced by a stronger one (a warning always outranks praise).
+  if (showing && PACE_RANK[level] <= PACE_RANK[current] && !(level === 'fast' && current === 'fast')) return;
   const r = canvasPrompt ? null : document.querySelector('#prompt .ch.current')?.getBoundingClientRect();
-  const box = canvasPrompt ? canvasPrompt.glyphBox(run.pos) : r ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
+  const box = canvasPrompt ? canvasPrompt.glyphBox(at) : r ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
   if (!box) return;
   el.style.left = `${box.x + box.w / 2}px`; el.style.top = `${box.y - 6}px`;
-  el.textContent = level === 'fast' ? 'Too fast!' : 'Slow down';
-  el.classList.remove('show'); el.classList.toggle('warn', level === 'warn'); void el.offsetWidth; el.classList.add('show');
+  el.textContent = PACE_TAGS[level]; el.dataset.level = level;
+  el.classList.remove('show'); el.classList.toggle('warn', level === 'warn'); el.classList.toggle('perfect', level === 'perfect'); void el.offsetWidth; el.classList.add('show');
+  if (level === 'perfect') sound.play('sparkle', 0.45, 1.15);
 }
 /** The live pace check is universal: every run, every mode, every chapter. */
 const paceWatched = (): boolean => !paceModal().classList.contains('open');
 /** After the modal closes, only presses from then on count toward the next check. */
 let paceRun: Run | null = null, paceFrom = 0;
+/** Words in a row finished at a perfect pace (PACE_PERFECT_WPM or slower). */
+let perfectRun = 0;
 /** PACE-01: going too fast opens a modal mid-passage — a key lit on a slow beat, and why speed works against the point. */
 function openPace(key: string): void {
   $('paceKey').textContent = key === ' ' ? '␣' : key.toUpperCase();

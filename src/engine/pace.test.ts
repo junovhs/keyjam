@@ -4,7 +4,7 @@ import { lessonExercises } from '../curriculum/lesson-flow';
 import { fresh, sanitize } from '../state/save';
 import { mergeProgress } from '../state/progress-sync';
 import { KeyModel } from './keymodel';
-import { LIVE_WINDOW, PACE_NOTE, freshPace, paceLevel, tooFastNow, medianInterval, notePace, paceFactor, paceNoteApplies, relaxedIntervalMs, typedFast } from './pace';
+import { LIVE_WINDOW, PACE_NOTE, blockedNext, freshPace, paceLevel, perfectWord, tooFastNow, medianInterval, notePace, paceFactor, paceNoteApplies, relaxedIntervalMs, typedFast } from './pace';
 import { applyRun } from './progress';
 import { Run } from './run';
 
@@ -56,10 +56,10 @@ describe('pace note (PACE-01)', () => {
 });
 
 describe('live pace warnings (PACE-01)', () => {
-  it('red over 230 BPM, yellow over the desired 110, nothing at or under 110', () => {
-    expect(paceLevel(typed('dededede', 200).strokes)).toBe('fast');   // 300 BPM
-    expect(paceLevel(typed('dededede', 400).strokes)).toBe('warn');   // 150 BPM
-    expect(paceLevel(typed('dededede', 600).strokes)).toBeNull();     // 100 BPM
+  it('red over 50 WPM, yellow over 36, nothing at or under 36', () => {
+    expect(paceLevel(typed('dededede', 200).strokes)).toBe('fast');   // 60 WPM
+    expect(paceLevel(typed('dededede', 300).strokes)).toBe('warn');   // 40 WPM
+    expect(paceLevel(typed('dededede', 400).strokes)).toBeNull();     // 30 WPM
     expect(paceLevel(typed('ded', 100).strokes)).toBeNull();          // too few presses to judge
   });
   it('clears on the first slow press', () => {
@@ -69,14 +69,24 @@ describe('live pace warnings (PACE-01)', () => {
     run.type('e', now + 900);
     expect(paceLevel(run.strokes)).toBeNull();
   });
+  it('blocks a press over 50 WPM, never one that is itself slower', () => {
+    const quick = typed('dededede', 200).strokes;
+    expect(blockedNext(quick, 0, 200)).toBe(true);
+    expect(blockedNext(quick, 0, 600)).toBe(false);
+    expect(blockedNext(typed('dededede', 400).strokes, 0, 400)).toBe(false);
+    const run = new Run('dd'); run.begin(0);
+    expect(run.type('d', 100, true)).toBe('miss'); expect(run.pos).toBe(0);
+  });
+  it('a word at 25 WPM or slower is perfect; the pause before it does not count', () => {
+    const at = (ms: number) => { const run = new Run('ded ded '); let now = 0; run.begin(now); for (const c of 'ded ded ') { now += c === 'd' && run.pos === 4 ? 5000 : ms; run.type(c, now); } return run.strokes; };
+    expect(perfectWord(at(500))).toBe(true);
+    expect(perfectWord(at(300))).toBe(false);
+    expect(perfectWord(typed('ded', 500).strokes)).toBe(false); // no Space: not a finished word
+  });
   it('counts only presses after `from`, so a closed modal needs a fresh window', () => {
     const run = typed('dededededede', 200);
     expect(tooFastNow(run.strokes, run.strokes.length)).toBe(false);
     expect(tooFastNow(run.strokes, run.strokes.length - LIVE_WINDOW)).toBe(true);
-  });
-  it('never costs a press: the run itself is untouched', () => {
-    const run = typed('dededede', 100);
-    expect(run.errors).toBe(0); expect(run.status).toBe('complete');
   });
 });
 

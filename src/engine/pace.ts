@@ -48,30 +48,53 @@ export function medianInterval(strokes: readonly Keystroke[]): number | null {
   return lats.length >= 6 ? median(lats) : null;
 }
 
-/** The tempo we want people to type at, in presses a minute: the pace modal's key flashes at it. */
-export const PACE_BPM = 110;
-/** Above this many presses a minute a press is tagged "Too fast!" in red (and the one-time modal opens). */
-export const PACE_FAST_BPM = 230;
-/** Above the desired tempo, a yellow "Slow down" tag: an early warning. Neither tag ever blocks or costs a press. */
-export const PACE_WARN_BPM = PACE_BPM;
+/** Pace bands, in words a minute (a word is five presses, as everywhere in the app). */
+export const PACE_PERFECT_WPM = 25;
+/** Over this, a yellow "Slow down" tag: a warning only. */
+export const PACE_WARN_WPM = 36;
+/** Over this, "Too fast!": the press is blocked (a miss) once the one-time modal has shown. */
+export const PACE_BLOCK_WPM = 50;
+/** The tempo we want, in presses a minute: the pace modal's key flashes at it. */
+export const PACE_BPM = PACE_PERFECT_WPM * 5;
+/** Ms per press at `wpm`. */
+const msAt = (wpm: number): number => 12_000 / wpm;
 /** Presses the live check looks back over: few enough to be instant, enough that one quick pair never trips it. */
 export const LIVE_WINDOW = 4;
-/** True when the last few presses (from `from` on; any key, right or wrong) typically came faster than `bpm`. */
-export function tooFastNow(strokes: readonly Keystroke[], from = 0, bpm = PACE_FAST_BPM): boolean {
+/** True when the last few presses (from `from` on; any key, right or wrong) typically came faster than `wpm`. */
+export function tooFastNow(strokes: readonly Keystroke[], from = 0, wpm = PACE_BLOCK_WPM): boolean {
   const lats = strokes.slice(Math.max(1, from)).map((s) => s.latencyMs).filter((ms) => ms < 2000).slice(-LIVE_WINDOW);
-  return lats.length >= LIVE_WINDOW && median(lats) < 60_000 / bpm;
+  return lats.length >= LIVE_WINDOW && median(lats) < msAt(wpm);
 }
 /**
- * The warning for the press just made: 'fast' over PACE_FAST_BPM, 'warn' over PACE_WARN_BPM, else null.
+ * The warning for the press just made: 'fast' over PACE_BLOCK_WPM, 'warn' over PACE_WARN_WPM, else null.
  * The press itself must also be over the line, so slowing down clears the warning on the very next key.
  */
 export function paceLevel(strokes: readonly Keystroke[], from = 0): 'fast' | 'warn' | null {
   const last = strokes.at(-1)?.latencyMs ?? Infinity;
-  for (const [level, bpm] of [['fast', PACE_FAST_BPM], ['warn', PACE_WARN_BPM]] as const) {
-    if (last < 60_000 / bpm && tooFastNow(strokes, from, bpm)) return level;
+  for (const [level, wpm] of [['fast', PACE_BLOCK_WPM], ['warn', PACE_WARN_WPM]] as const) {
+    if (last < msAt(wpm) && tooFastNow(strokes, from, wpm)) return level;
   }
   return null;
 }
+/** Would a press arriving `gapMs` after the last one be over PACE_BLOCK_WPM? Then it is blocked. (Needs an earlier press.) */
+export function blockedNext(strokes: readonly Keystroke[], from: number, gapMs: number): boolean {
+  if (!strokes.length) return false;
+  return paceLevel([...strokes, { key: '', typed: '', index: -1, correct: true, latencyMs: gapMs }], from) === 'fast';
+}
+/**
+ * Was the word just finished (the last stroke is its correct Space) typed at PACE_PERFECT_WPM or slower?
+ * Its presses after the first letter count, the Space included; the pause before the word does not.
+ */
+export function perfectWord(strokes: readonly Keystroke[]): boolean {
+  const end = strokes.length - 1, space = strokes[end];
+  if (!space?.correct || space.key !== ' ') return false;
+  let start = end - 1;
+  while (start >= 0 && !(strokes[start]!.correct && strokes[start]!.key === ' ')) start--;
+  const lats = strokes.slice(start + 2, end + 1).map((s) => s.latencyMs);
+  return lats.length >= 2 && median(lats) >= msAt(PACE_PERFECT_WPM);
+}
+/** Perfect words in a row that earn one "Perfect speed". */
+export const PERFECT_EVERY = 3;
 
 /** Ms per press at the chapter's relaxed pace (its wpmTarget; a word is five characters). */
 export const relaxedIntervalMs = (trail: Trail): number => 12_000 / (trail.wpmTarget ?? groveOf(trail).wpmTarget);
