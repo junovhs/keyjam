@@ -48,10 +48,12 @@ export function medianInterval(strokes: readonly Keystroke[]): number | null {
   return lats.length >= 6 ? median(lats) : null;
 }
 
+/** The tempo we want people to type at, in presses a minute: the pace modal's key flashes at it. */
+export const PACE_BPM = 110;
 /** Above this many presses a minute a press is tagged "Too fast!" in red (and the one-time modal opens). */
-export const PACE_FAST_BPM = 110;
-/** Above this many a minute, a yellow "Slow down" tag: an early warning. Neither tag ever blocks or costs a press. */
-export const PACE_WARN_BPM = 90;
+export const PACE_FAST_BPM = 230;
+/** Above the desired tempo, a yellow "Slow down" tag: an early warning. Neither tag ever blocks or costs a press. */
+export const PACE_WARN_BPM = PACE_BPM;
 /** Presses the live check looks back over: few enough to be instant, enough that one quick pair never trips it. */
 export const LIVE_WINDOW = 4;
 /** True when the last few presses (from `from` on; any key, right or wrong) typically came faster than `bpm`. */
@@ -84,8 +86,6 @@ export function typedFast(strokes: readonly Keystroke[], trail: Trail, factor = 
   return median !== null && median < relaxedIntervalMs(trail) / factor;
 }
 
-/** The pace modal's beat: the hero key flashes at this tempo, a calm pace to press along to. */
-export const PACE_BPM = 78;
 /** The pace modal's heading. */
 export const PACE_TITLE = 'Slow down. This isn’t a race.';
 /** The pace modal's message: about technique, with no number and no claim about the finger used. */

@@ -702,7 +702,7 @@ function typeKey(k: string): void {
   else if (last.correct) sound.play('key');
   if (pulse && last.correct) $('beatDot').style.setProperty('--fill', onBeat(performance.now(), pulse.t0, pulse.interval).toFixed(2));
   // PACE-01: over the live speed limit, the pace modal opens right now, mid-passage.
-  // PACE-01: over 90 BPM a yellow "Slow down", over 110 a red "Too fast!" (the very first time, the modal). Never blocks a press.
+  // PACE-01: over the desired 110 BPM a yellow "Slow down", over 230 a red "Too fast!" (the very first time, the modal). Never blocks a press.
   const level = paceWatched() ? paceLevel(run.strokes, paceRun === run ? paceFrom : 0) : null;
   const fast = level === 'fast' && !state.settings.paceSeen;
   if (level && !fast) flagPace(level); else if (!level) $('tooFast').classList.remove('show');

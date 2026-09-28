@@ -56,15 +56,15 @@ describe('pace note (PACE-01)', () => {
 });
 
 describe('live pace warnings (PACE-01)', () => {
-  it('red over 110 BPM, yellow over 90, nothing at or under 90', () => {
-    expect(paceLevel(typed('dededede', 400).strokes)).toBe('fast');   // 150 BPM
-    expect(paceLevel(typed('dededede', 600).strokes)).toBe('warn');   // 100 BPM
-    expect(paceLevel(typed('dededede', 700).strokes)).toBeNull();     // ~86 BPM
+  it('red over 230 BPM, yellow over the desired 110, nothing at or under 110', () => {
+    expect(paceLevel(typed('dededede', 200).strokes)).toBe('fast');   // 300 BPM
+    expect(paceLevel(typed('dededede', 400).strokes)).toBe('warn');   // 150 BPM
+    expect(paceLevel(typed('dededede', 600).strokes)).toBeNull();     // 100 BPM
     expect(paceLevel(typed('ded', 100).strokes)).toBeNull();          // too few presses to judge
   });
   it('clears on the first slow press', () => {
     const run = new Run('dededede'); let now = 0; run.begin(now);
-    for (const c of 'dededed') { now += 300; run.type(c, now); }
+    for (const c of 'dededed') { now += 200; run.type(c, now); }
     expect(paceLevel(run.strokes)).toBe('fast');
     run.type('e', now + 900);
     expect(paceLevel(run.strokes)).toBeNull();
