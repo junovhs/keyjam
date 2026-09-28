@@ -4,7 +4,7 @@ import { lessonExercises } from '../curriculum/lesson-flow';
 import { fresh, sanitize } from '../state/save';
 import { mergeProgress } from '../state/progress-sync';
 import { KeyModel } from './keymodel';
-import { PACE_NOTE, freshPace, medianInterval, notePace, paceFactor, paceNoteApplies, relaxedIntervalMs, typedFast } from './pace';
+import { LIVE_WINDOW, PACE_NOTE, freshPace, tooFastNow, medianInterval, notePace, paceFactor, paceNoteApplies, relaxedIntervalMs, typedFast } from './pace';
 import { applyRun } from './progress';
 import { Run } from './run';
 
@@ -52,6 +52,20 @@ describe('pace note (PACE-01)', () => {
   it('says nothing numeric and claims nothing about the finger used', () => {
     expect(PACE_NOTE).not.toMatch(/\d|wpm/i);
     expect(PACE_NOTE).not.toMatch(/you used|wrong finger/i);
+  });
+});
+
+describe('live speed limit (PACE-01)', () => {
+  it('trips within a few presses above 100 BPM, never at or below it', () => {
+    expect(tooFastNow(typed('dededede', 500).strokes)).toBe(true);
+    expect(tooFastNow(typed('dededede', 600).strokes)).toBe(false);
+    expect(tooFastNow(typed('dededede', 900).strokes)).toBe(false);
+    expect(tooFastNow(typed('ded', 100).strokes)).toBe(false);
+  });
+  it('counts only presses after `from`, so a closed modal needs a fresh window', () => {
+    const run = typed('dededededede', 200);
+    expect(tooFastNow(run.strokes, run.strokes.length)).toBe(false);
+    expect(tooFastNow(run.strokes, run.strokes.length - LIVE_WINDOW)).toBe(true);
   });
 });
 

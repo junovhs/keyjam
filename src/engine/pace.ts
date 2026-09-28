@@ -33,13 +33,29 @@ export const paceFactor = (ev: PaceEvidence): number => (ev.established ? ESTABL
 /** The chapters where technique is being formed; Bark onward (capitals, symbols, Flow) never shows the note. */
 const PACE_GROVES = new Set(['roots', 'home', 'canopy', 'undergrowth']);
 
-/** Median ms between consecutive correct presses inside a word; retries, word boundaries and pauses (≥ 2 s) excluded. */
-export function medianInterval(strokes: readonly Keystroke[]): number | null {
-  const lats = strokes.filter((s, i, all) => {
+/** Ms between consecutive correct presses inside a word, in order; retries, word boundaries and pauses (≥ 2 s) excluded. */
+function wordIntervals(strokes: readonly Keystroke[]): number[] {
+  return strokes.filter((s, i, all) => {
     const prev = all[i - 1];
     return s.correct && prev?.correct && prev.index === s.index - 1 && s.key !== ' ' && prev.key !== ' ' && s.latencyMs < 2000;
-  }).map((s) => s.latencyMs).sort((a, b) => a - b);
-  return lats.length >= 6 ? lats[Math.floor(lats.length / 2)]! : null;
+  }).map((s) => s.latencyMs);
+}
+const median = (xs: number[]): number => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]!;
+
+/** Median ms between consecutive correct presses inside a word; retries, word boundaries and pauses (≥ 2 s) excluded. */
+export function medianInterval(strokes: readonly Keystroke[]): number | null {
+  const lats = wordIntervals(strokes);
+  return lats.length >= 6 ? median(lats) : null;
+}
+
+/** The live speed limit: presses faster than 100 a minute (~20 WPM) open the pace modal mid-run. */
+export const PACE_LIMIT_BPM = 100;
+/** Presses the live check looks back over: few enough to be instant, enough that one quick pair never trips it. */
+export const LIVE_WINDOW = 4;
+/** True the moment the last few in-word presses (from `from` on) typically came faster than PACE_LIMIT_BPM. */
+export function tooFastNow(strokes: readonly Keystroke[], from = 0): boolean {
+  const lats = wordIntervals(strokes.slice(Math.max(0, from - 1))).slice(-LIVE_WINDOW);
+  return lats.length >= LIVE_WINDOW && median(lats) < 60_000 / PACE_LIMIT_BPM;
 }
 
 /** Ms per press at the chapter's relaxed pace (its wpmTarget; a word is five characters). */

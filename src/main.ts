@@ -2,7 +2,7 @@ import { lessonExercises, type LessonExercise, type SlotPick } from './curriculu
 import { nextPractice } from './engine/next-practice';
 import { beatInterval, evenness, onBeat } from './engine/beat';
 import { demoSchedule, demoStepMs, type DemoStep } from './engine/demo';
-import { PACE_BPM, PACE_NOTE, PACE_TITLE, notePace, paceFactor, paceNoteApplies, typedFast } from './engine/pace';
+import { PACE_BPM, PACE_NOTE, PACE_TITLE, notePace, paceNoteApplies, tooFastNow } from './engine/pace';
 import { briefingFor, SHIFT_TOKEN, type BriefIcon, type Briefing } from './curriculum/briefings';
 import { fingerPractice, completeFingerPage, FINGER_PAGES, type FingerPractice, type SideScore } from './engine/finger-practice';
 import type { Stop } from './curriculum/stops';
@@ -701,6 +701,8 @@ function typeKey(k: string): void {
   else if (last.correct && last.key === ' ') sound.play('word', 1, 1 + Math.min(run.combo, 40) * 0.004);
   else if (last.correct) sound.play('key');
   if (pulse && last.correct) $('beatDot').style.setProperty('--fill', onBeat(performance.now(), pulse.t0, pulse.interval).toFixed(2));
+  // PACE-01: over the live speed limit, the pace modal opens right now, mid-passage.
+  if (r !== 'done' && paceWatched() && tooFastNow(run.strokes, paceRun === run ? paceFrom : 0)) openPace(last.key);
   if (r === 'done') {
     canvasPrompt?.onComplete();
     stopPulse(); return finish();
@@ -749,9 +751,13 @@ function stopDemo(): void {
   if (demo) { demo.forEach(clearTimeout); demo = null; pulseFinger(null); keymap(); nextVisual(); }
   $('replayDemo').hidden = !(mode.kind === 'slow' && run.status === 'idle');
 }
-function practiseSlowly(): void { closePace(); if (run.status !== 'complete' || !run.text) return; mode = { kind: 'slow', text: run.text }; resetRun(); }
+function practiseSlowly(): void { closePace(); if (run.status === 'idle' || !run.text) return; mode = { kind: 'slow', text: run.text }; resetRun(); }
 const paceModal = () => $('paceModal');
-/** PACE-01: going fast opens a modal over the result — a key lit on a slow beat, and why speed works against the point. */
+/** The live pace check covers lesson technique exercises (drills, loops, words) in chapters 1–4; never a beat run. */
+const paceWatched = (): boolean => mode.kind === 'trail' && !runExercise.beat && paceNoteApplies(runTrail, runExercise) && !paceModal().classList.contains('open');
+/** After the modal closes, only presses from then on count toward the next check. */
+let paceRun: Run | null = null, paceFrom = 0;
+/** PACE-01: going too fast opens a modal mid-passage — a key lit on a slow beat, and why speed works against the point. */
 function openPace(key: string): void {
   $('paceKey').textContent = key === ' ' ? '␣' : key.toUpperCase();
   paceModal().style.setProperty('--beat', `${Math.round(60_000 / PACE_BPM)}ms`);
@@ -760,15 +766,14 @@ function openPace(key: string): void {
 }
 function closePace(): void {
   if (!paceModal().classList.contains('open')) return;
-  paceModal().classList.remove('open'); if (run.status === 'complete') $('resultTitle').focus();
+  paceRun = run; paceFrom = run.strokes.length;
+  paceModal().classList.remove('open'); (document.activeElement as HTMLElement | null)?.blur();
 }
 /** What Continue opens next on the way to `lesson`: a finger stop woven before it (DEC-20), or the lesson itself. */
 function stepName(lesson: Trail): string {
   const stop = blockingStop(state, lesson);
   return stop ? `${stop.pair.name} · ${fingerLevels(fingerById(stop.pair.sides[0])!)[stop.level]!.name}` : lesson.name;
 }
-/** Lessons whose pace note has shown this session (PACE-01). */
-const paceNoted = new Set<string>();
 function finish(): void {
   let newCharm: Keepsake | null = null;
   const m = metrics(), t = runTrail, wasReplay = replayReturn !== null;
@@ -837,12 +842,8 @@ function finish(): void {
   const target = slotPick?.trail === t.id ? slotPick.pick?.target : undefined;
   if (mode.kind === 'trail' && runExercise.format === 'passage' && target && missedTarget(run.text, run.strokes, target)) copy += ` ${target[0]!.toUpperCase()} then ${target[1]!.toUpperCase()} slipped in the sentence — it will come back.`;
   $('resultTitle').textContent = title; $('resultCopy').innerHTML = renderCopy(copy);
-  // PACE-01: typed far above a relaxed pace → one gentle suggestion per lesson per session; never a gate or a number.
-  // PACE-02: an established fast habit (fast early Roots runs) brings the note sooner, and once per exercise, not per lesson.
+  // PACE-02: fast early Roots runs are still saved as evidence; the pace modal itself fires live, mid-run (PACE-01).
   if (mode.kind === 'trail') state.pace = notePace(state.pace, t, run.strokes);
-  const paceKey = state.pace.established ? `${t.id}#${runExerciseIndex}` : t.id;
-  const fast = mode.kind === 'trail' && !runExercise.beat && paceNoteApplies(t, runExercise) && !paceNoted.has(paceKey) && typedFast(run.strokes, t, paceFactor(state.pace));
-  if (fast) paceNoted.add(paceKey);
   $('resultWpm').textContent = String(m.wpm); $('resultAcc').textContent = acc + '%';
   // Spec F4: pace is shown in exactly one place — the Flow chapter's checkpoint card — as information, never a target.
   $('resultWpm').parentElement!.hidden = !(mode.kind === 'trail' && t.id === 'flow-checkpoint');
@@ -889,7 +890,6 @@ function finish(): void {
   setTimeout(() => sound.play(chime), 260);
   save(); arena().classList.add('result-mode'); document.body.classList.add('showing-result');
   $('resultTitle').focus();
-  if (fast) openPace([...t.newKeys].find(k => k !== ' ') ?? run.text.trim()[0] ?? 'f');
   header();
 }
 
