@@ -2,7 +2,7 @@ import { lessonExercises, type LessonExercise, type SlotPick } from './curriculu
 import { nextPractice } from './engine/next-practice';
 import { beatInterval, evenness, onBeat } from './engine/beat';
 import { demoSchedule, demoStepMs, type DemoStep } from './engine/demo';
-import { PACE_NOTE, notePace, paceFactor, paceNoteApplies, typedFast } from './engine/pace';
+import { PACE_BPM, PACE_NOTE, PACE_TITLE, notePace, paceFactor, paceNoteApplies, typedFast } from './engine/pace';
 import { briefingFor, SHIFT_TOKEN, type BriefIcon, type Briefing } from './curriculum/briefings';
 import { fingerPractice, completeFingerPage, FINGER_PAGES, type FingerPractice, type SideScore } from './engine/finger-practice';
 import type { Stop } from './curriculum/stops';
@@ -409,6 +409,7 @@ function peekFinger(id: string | null): void {
 }
 onFingerHover(peekFinger);
 $('practiseSlowly').onclick = practiseSlowly;
+$('closePace').onclick = closePace;
 $('replayDemo').onclick = startDemo;
 /** A finger named in lesson copy (UI-14): pointer hover or keyboard focus shows it on the hands, with its nail pulsing. */
 function peekFingerRef(e: Event, on: boolean): void {
@@ -748,7 +749,19 @@ function stopDemo(): void {
   if (demo) { demo.forEach(clearTimeout); demo = null; pulseFinger(null); keymap(); nextVisual(); }
   $('replayDemo').hidden = !(mode.kind === 'slow' && run.status === 'idle');
 }
-function practiseSlowly(): void { if (run.status !== 'complete' || !run.text) return; mode = { kind: 'slow', text: run.text }; resetRun(); }
+function practiseSlowly(): void { closePace(); if (run.status !== 'complete' || !run.text) return; mode = { kind: 'slow', text: run.text }; resetRun(); }
+const paceModal = () => $('paceModal');
+/** PACE-01: going fast opens a modal over the result — a key lit on a slow beat, and why speed works against the point. */
+function openPace(key: string): void {
+  $('paceKey').textContent = key === ' ' ? '␣' : key.toUpperCase();
+  paceModal().style.setProperty('--beat', `${Math.round(60_000 / PACE_BPM)}ms`);
+  $('paceTitle').textContent = PACE_TITLE; $('paceNote').textContent = PACE_NOTE;
+  paceModal().classList.add('open'); $('closePace').focus();
+}
+function closePace(): void {
+  if (!paceModal().classList.contains('open')) return;
+  paceModal().classList.remove('open'); if (run.status === 'complete') $('resultTitle').focus();
+}
 /** What Continue opens next on the way to `lesson`: a finger stop woven before it (DEC-20), or the lesson itself. */
 function stepName(lesson: Trail): string {
   const stop = blockingStop(state, lesson);
@@ -830,7 +843,6 @@ function finish(): void {
   const paceKey = state.pace.established ? `${t.id}#${runExerciseIndex}` : t.id;
   const fast = mode.kind === 'trail' && !runExercise.beat && paceNoteApplies(t, runExercise) && !paceNoted.has(paceKey) && typedFast(run.strokes, t, paceFactor(state.pace));
   if (fast) paceNoted.add(paceKey);
-  $('resultPace').textContent = fast ? PACE_NOTE : ''; $('resultPace').hidden = !fast; $('practiseSlowly').hidden = !fast;
   $('resultWpm').textContent = String(m.wpm); $('resultAcc').textContent = acc + '%';
   // Spec F4: pace is shown in exactly one place — the Flow chapter's checkpoint card — as information, never a target.
   $('resultWpm').parentElement!.hidden = !(mode.kind === 'trail' && t.id === 'flow-checkpoint');
@@ -877,6 +889,7 @@ function finish(): void {
   setTimeout(() => sound.play(chime), 260);
   save(); arena().classList.add('result-mode'); document.body.classList.add('showing-result');
   $('resultTitle').focus();
+  if (fast) openPace([...t.newKeys].find(k => k !== ' ') ?? run.text.trim()[0] ?? 'f');
   header();
 }
 
@@ -932,7 +945,6 @@ function sessionCheck(): void {
 }
 // ---- input -----------------------------------------------------------------------
 function handleIdleOrResult(e: KeyboardEvent): void {
-  if (e.key === 'Enter' && document.activeElement?.id === 'practiseSlowly') { e.preventDefault(); practiseSlowly(); return; }
   if (e.key === 'Enter') { e.preventDefault(); if (completionHome || run.status === 'complete') continueAfterResult(); else begin(); return; }
   if (e.key === 'Escape') { e.preventDefault(); if (run.status === 'complete') continueAfterResult(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -950,6 +962,14 @@ function trapDialog(e: KeyboardEvent, dialog: HTMLElement): void {
   else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
 }
 document.addEventListener('keydown', (e) => {
+  // The pace modal holds every key until it is closed: stray typing never skips past it.
+  if (paceModal().classList.contains('open')) {
+    trapDialog(e, paceModal());
+    if (e.key === 'Escape') { e.preventDefault(); closePace(); }
+    else if (e.key === 'Enter' || e.key === ' ') { if (!(document.activeElement instanceof HTMLButtonElement)) e.preventDefault(); }
+    else if (e.key !== 'Tab') e.preventDefault();
+    return;
+  }
   if (settingsModal().classList.contains('open')) { trapDialog(e, settingsModal()); if (e.key === 'Escape') { sound.play('close'); settingsModal().classList.remove('open'); $('settingsTopBtn').focus(); e.preventDefault(); } return; }
   if (arena().classList.contains('map-mode')) { mapKeys?.(e); return; }
   if (e.target instanceof HTMLElement && e.target.closest('button,a,input,select,textarea,summary,[contenteditable]')) return;

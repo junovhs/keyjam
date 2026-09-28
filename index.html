@@ -198,9 +198,6 @@ kbd{font:inherit}
 .result-offer.required{background:var(--ink);color:#fff;border-color:var(--ink)}
 .result-offer.required strong{color:var(--orange-soft)}
 .result-offer b{font-family:var(--mono)}
-.result-pace{max-width:900px;margin:10px 0 0;padding:10px 14px;border-left:3px solid var(--orange);background:rgba(255,84,24,.06);color:var(--ink);font-size:14px;line-height:1.5}
-.result-slow{margin:8px 0 0;padding:7px 12px;border:1px solid var(--orange);border-radius:4px;background:transparent;color:var(--orange);font:600 13px/1.2 var(--sans, inherit);cursor:pointer}
-.result-slow:hover,.result-slow:focus-visible{background:rgba(255,84,24,.08)}
 .result-offer{max-width:900px;margin:14px 0 0;padding:12px 14px;border:1px solid var(--orange);border-radius:4px;background:#fff4ee;color:var(--ink);font-size:14px}
 .result-offer strong{color:var(--orange);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;font-size:11px;margin-right:8px}
 
@@ -221,6 +218,21 @@ kbd{font:inherit}
 .onboard-options b{font-size:14px;color:var(--ink)}
 .onboard-options span{font-size:12.5px;color:var(--soft);line-height:1.4}
 .onboard .modalbox{width:min(560px,100%)}
+/* PACE-01: the hero key takes the top 40% of the box and lights on the beat (--beat is set from PACE_BPM). */
+.pace-modal{z-index:30}
+.pace-modal .modalbox{width:min(560px,100%);height:min(620px,calc(100vh - 36px));display:grid;grid-template-rows:40% 1fr;padding:0;overflow:hidden}
+.pace-hero{display:grid;place-items:center;min-height:0;border-bottom:1px solid var(--line-strong);background:radial-gradient(circle at 50% 55%,rgba(255,84,24,.14),transparent 62%),var(--paper)}
+.pace-key{display:grid;place-items:center;height:min(70%,150px);aspect-ratio:1;border:2px solid var(--line-strong);border-radius:18px;background:#fff;color:var(--ink);font:800 clamp(44px,9vh,78px)/1 var(--mono);box-shadow:0 8px 0 #d9d5cc,0 14px 24px rgba(17,17,15,.12);animation:pace-flash var(--beat,769ms) ease-out infinite}
+@keyframes pace-flash{
+  0%{background:var(--orange);border-color:var(--orange);color:#fff;transform:translateY(6px);box-shadow:0 2px 0 #c73d0c,0 0 0 14px rgba(255,84,24,.22),0 0 44px rgba(255,84,24,.55)}
+  35%{background:var(--orange);border-color:var(--orange);color:#fff;transform:translateY(0);box-shadow:0 8px 0 #c73d0c,0 0 0 4px rgba(255,84,24,.1),0 14px 24px rgba(255,84,24,.25)}
+  100%{background:#fff;border-color:var(--line-strong);color:var(--ink);transform:translateY(0);box-shadow:0 8px 0 #d9d5cc,0 14px 24px rgba(17,17,15,.12)}
+}
+.pace-body{padding:22px 28px 26px;overflow:auto}
+.pace-body h2{font-size:27px}
+.pace-body p{margin:10px 0 0;color:var(--ink);font-size:15.5px;line-height:1.55}
+.pace-body .modal-actions button{font-size:10px}
+@media (max-width:520px){.pace-body{padding:18px 16px 20px}.pace-body h2{font-size:22px}}
 .utility{display:flex;gap:16px;justify-content:flex-end;padding:0 0 10px}
 .utility button{font-size:10px;color:var(--muted)}
 .utility button:hover{color:var(--orange)}
@@ -418,8 +430,6 @@ kbd{font:inherit}
           <span class="eyebrow" id="resultEyebrow">Passage complete</span>
           <h2 id="resultTitle" tabindex="-1">A little more familiar.</h2>
           <p id="resultCopy"></p>
-          <p class="result-pace" id="resultPace" hidden></p>
-          <button type="button" class="result-slow" id="practiseSlowly" hidden>Practise slowly</button>
           <div class="result-mastery" id="resultMastery"></div>
           <div class="score">
             <div><small>Accuracy</small><b id="resultAcc">0%</b></div>
@@ -474,6 +484,21 @@ kbd{font:inherit}
       <button class="danger" id="resetBtn" type="button">Reset</button>
       <button id="closeSettings" type="button">Close</button>
       <input type="file" id="importFile" accept=".json,application/json" hidden>
+    </div>
+  </div>
+</div>
+<!-- PACE-01: typed far above a relaxed pace. A beat-lit key over the message; it waits until closed. -->
+<div class="modal pace-modal" id="paceModal" role="alertdialog" aria-modal="true" aria-labelledby="paceTitle" aria-describedby="paceNote">
+  <div class="modalbox">
+    <div class="pace-hero" aria-hidden="true"><span class="pace-key" id="paceKey">F</span></div>
+    <div class="pace-body">
+      <span class="eyebrow">Too fast</span>
+      <h2 id="paceTitle"></h2>
+      <p id="paceNote"></p>
+      <div class="modal-actions">
+        <button class="primary" id="practiseSlowly" type="button">Practise this slowly</button>
+        <button id="closePace" type="button">I’ll slow down</button>
+      </div>
     </div>
   </div>
 </div>

@@ -55,5 +55,9 @@ export function typedFast(strokes: readonly Keystroke[], trail: Trail, factor = 
   return median !== null && median < relaxedIntervalMs(trail) / factor;
 }
 
-/** The result-card note: a suggestion about technique, with no number and no claim about the finger used. */
-export const PACE_NOTE = "That was quick. Speed isn't the goal here. If these are old habits, try it once slowly and check each key uses the finger shown.";
+/** The pace modal's beat: the hero key flashes at this tempo, a calm pace to press along to. */
+export const PACE_BPM = 78;
+/** The pace modal's heading. */
+export const PACE_TITLE = 'Slow down. This isn’t a race.';
+/** The pace modal's message: about technique, with no number and no claim about the finger used. */
+export const PACE_NOTE = "Going fast isn't the point. Here it actually works against what this app is for. We're slowly programming good muscle memory into your fingers, and that only happens slowly: one calm, correct press at a time, with each key on the finger shown.";
