@@ -1182,13 +1182,13 @@ sync.onStatus((s) => account.setNote(syncNote(s)));
 // this only mounts it on first use (most sessions never open it) and points
 // the brand mark at it. While it is open the run must not hear keys.
 let docsPanel: PanelHandle | null = null;
-const docsOpen = $<HTMLButtonElement>('docsOpen');
+const docsOpen = $<HTMLAnchorElement>('docsOpen');
 const ensureDocs = (): PanelHandle => docsPanel ??= mountPanel(document.body, docs, {
   navLabel: 'On this page',
   backLabel: 'Back to typing',
   onToggle(open) { docsOpen.setAttribute('aria-expanded', String(open)); if (!open) docsOpen.focus(); },
 });
-docsOpen.addEventListener('click', () => ensureDocs().open());
+docsOpen.addEventListener('click', (e) => { e.preventDefault(); ensureDocs().open(); });
 /** The brand mark always leads back to the lesson in progress. A run mid-passage is left alone. */
 $('brandHome').onclick = () => {
   if (arena().classList.contains('map-mode')) closeMap();

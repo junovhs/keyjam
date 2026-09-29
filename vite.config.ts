@@ -22,6 +22,12 @@ export default defineConfig({
       docs: { ...docs, entity: { ...docs.entity, url: siteUrl } },
       entityType: 'SoftwareApplication',
       stylesheet: [true, '/docs-theme.css'],
+      // The docs title is a sentence ("…A gentler approach."), so the default
+      // "{title}" wording reads badly; name the manual instead.
+      fullManualNote: {
+        section: 'This page is one part of the KeyJam manual. The complete manual is a single page, short enough to read in one go: {link}',
+        index: 'This page is the whole KeyJam manual: every section, about {words} words. It is short enough to read in one go.',
+      },
     }),
   ],
   build: { outDir: 'dist', target: 'es2022' },

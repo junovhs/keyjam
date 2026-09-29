@@ -46,7 +46,7 @@ kbd{font:inherit}
 .brand-block{display:flex;align-items:center;gap:18px}
 .brand{font-size:26px;font-weight:900;letter-spacing:-.055em;color:var(--ink);background:none;border:0;padding:0;font:inherit;font-size:26px;font-weight:900;cursor:pointer;display:flex;align-items:baseline;gap:12px}
 .brand:hover,.brand:focus-visible{color:var(--orange)}
-.brand-hint{background:none;border:0;padding:0;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}.brand-hint:hover,.brand-hint:focus-visible{color:var(--orange)}
+.brand-hint{background:none;border:0;padding:0;cursor:pointer;text-decoration:none;font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}.brand-hint:hover,.brand-hint:focus-visible{color:var(--orange)}
 @media (max-width:640px){.brand-hint{display:none}}
 .tagline{font-size:10px;color:var(--muted);letter-spacing:.22em}
 .nav{margin-left:auto;display:flex;align-items:center;gap:34px}
@@ -353,9 +353,10 @@ kbd{font:inherit}
   <header class="topbar">
     <div class="shell-inner">
     <div class="brand-block">
-      <!-- The brand mark returns to the current lesson; About & docs (dopedocs) is its own link beside it. -->
+      <!-- The brand mark returns to the current lesson; About & docs (dopedocs) is its own link beside it.
+         It is a real link to the static /docs/ manual so crawlers and no-JS readers find it; with JS it opens the panel. -->
       <button id="brandHome" class="brand" type="button" aria-label="Back to your current lesson">KeyJam</button>
-      <button id="docsOpen" class="brand-hint" type="button" aria-label="About KeyJam and documentation" aria-expanded="false">ⓘ About &amp; docs</button>
+      <a id="docsOpen" class="brand-hint" href="/docs/" aria-label="About KeyJam and documentation" aria-expanded="false">ⓘ About &amp; docs</a>
     </div>
     <nav class="nav" aria-label="Primary">
       <button id="lessonsNav" type="button">Course</button>
